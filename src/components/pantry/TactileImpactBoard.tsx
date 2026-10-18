@@ -256,6 +256,8 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                 {prepItems.map((pi) => {
                   const assetSrc = resolveFoodAsset(pi.slug, pi.category);
                   const qtyInfo = formatQuantityWithCulinaryFraction(pi.amount);
+                  const sizeTier = pi.size || 'medium';
+                  const scaleFactor = sizeTier === 'small' ? 0.82 : sizeTier === 'large' ? 1.22 : 1.0;
 
                   return (
                     <motion.div
@@ -271,32 +273,54 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                       }}
                       className="group/item relative flex items-center space-x-2 bg-[#2c1f16] border border-[#5a4430] rounded-xl px-2.5 py-1.5 shadow-md hover:border-[#cc5a35] transition-[border-color,background-color] duration-150 select-none"
                     >
-                      <div className="relative w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center">
-                        <Image
-                          src={assetSrc}
-                          alt={pi.name}
-                          width={44}
-                          height={44}
-                          className="object-contain drop-shadow"
-                        />
+                      <div className="relative w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center overflow-visible">
+                        <div
+                          style={{ transform: `scale(${scaleFactor})` }}
+                          className="transition-transform duration-200 flex items-center justify-center"
+                        >
+                          <Image
+                            src={assetSrc}
+                            alt={pi.name}
+                            width={44}
+                            height={44}
+                            className="object-contain drop-shadow"
+                          />
+                        </div>
                       </div>
                       <div className="text-left pr-1">
-                        <span className="block text-xs sm:text-sm font-medium text-[#f5efe6] capitalize leading-tight">
-                          {pi.name}
-                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="block text-xs sm:text-sm font-medium text-[#f5efe6] capitalize leading-tight">
+                            {sizeTier === 'small'
+                              ? `Small ${pi.name}`
+                              : sizeTier === 'large'
+                              ? `Large ${pi.name}`
+                              : pi.name}
+                          </span>
+                          {sizeTier !== 'medium' && (
+                            <span
+                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded leading-none ${
+                                sizeTier === 'small'
+                                  ? 'bg-[#3b2a1e] text-[#e69374] border border-[#543b29]'
+                                  : 'bg-[#4a2e1d] text-[#ffab8f] border border-[#7a482b]'
+                              }`}
+                            >
+                              {sizeTier === 'small' ? 'S' : 'L'}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] sm:text-xs font-mono text-[#cc5a35]">
                           {qtyInfo.display} {pi.unit}
                         </span>
                       </div>
 
-                      {/* Remove single item button */}
+                      {/* Remove single item button with refund */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removePrepItem(pi.id);
                         }}
                         className="opacity-60 hover:opacity-100 p-1 rounded hover:bg-white/10 text-[#a39480] hover:text-red-400 transition-colors"
-                        title="Remove from pan"
+                        title="Remove from pan (returns to pantry)"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>

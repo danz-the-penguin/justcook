@@ -39,6 +39,7 @@ export interface PrepItem {
   amount: number;
   unit: string;
   size?: 'small' | 'medium' | 'large';
+  batchId?: string;
   droppedAt: number;
 }
 
@@ -88,7 +89,7 @@ interface PantryStore {
   editCustomAsset: (formData: FormData) => Promise<{ success: boolean; error?: string; item?: any }>;
 }
 
-let lastDropSlug = '';
+let lastDropKey = '';
 let lastDropTimestamp = 0;
 
 export const usePantryStore = create<PantryStore>((set, get) => ({
@@ -104,16 +105,19 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
   setPrepBoardOpen: (open) => set({ isPrepBoardOpen: open }),
 
   dropItemToPrepBoard: async (item, amount = 1, targetBatchId?: string) => {
+    const targetBatch = (targetBatchId ? item.batches.find((b) => b.id === targetBatchId) : null) || item.batches[0];
+    const itemSize: 'small' | 'medium' | 'large' = targetBatch?.size || 'medium';
+    const dropKey = `${item.slug}:${itemSize}:${targetBatch?.id || 'default'}`;
+
     const now = Date.now();
     // Guard against identical item double-drop within 350ms
-    if (lastDropSlug === item.slug && now - lastDropTimestamp < 350) {
+    if (lastDropKey === dropKey && now - lastDropTimestamp < 350) {
       return;
     }
-    lastDropSlug = item.slug;
+    lastDropKey = dropKey;
     lastDropTimestamp = now;
 
     sound.playPanImpact();
-    const targetBatch = (targetBatchId ? item.batches.find((b) => b.id === targetBatchId) : null) || item.batches[0];
     const deductAmt = Math.min(amount, targetBatch ? targetBatch.quantity : item.totalQuantity > 0 ? amount : 0);
 
     // Optimistically deduct from inventory if in stock
@@ -121,13 +125,16 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       get().decrementBatch(targetBatch.id, deductAmt);
     }
 
-    // Add to prep board with impact animation timestamp
+    // Add to prep board - keep distinct size tiers separate!
     const currentPrep = get().prepItems;
-    const existing = currentPrep.find((p) => p.slug === item.slug);
+    const existing = currentPrep.find(
+      (p) => p.slug === item.slug && (p.size || 'medium') === itemSize
+    );
+
     let nextPrep: PrepItem[];
     if (existing) {
       nextPrep = currentPrep.map((p) =>
-        p.slug === item.slug
+        p.id === existing.id
           ? { ...p, amount: snapToCulinaryFraction(p.amount + (deductAmt || amount)), droppedAt: Date.now() }
           : p
       );
@@ -135,13 +142,14 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       nextPrep = [
         ...currentPrep,
         {
-          id: `${item.slug}-${Date.now()}`,
+          id: `${item.slug}-${itemSize}-${Date.now()}`,
           slug: item.slug,
           name: item.name,
           category: item.category,
           amount: deductAmt || amount,
           unit: item.defaultUnit,
-          size: targetBatch?.size || 'medium',
+          size: itemSize,
+          batchId: targetBatch?.id,
           droppedAt: Date.now(),
         },
       ];
@@ -152,12 +160,25 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
   clearPrepItems: () => {
     sound.playWoodTap();
+    const currentPrep = get().prepItems;
+    // Refund prepped items back to their pantry batches
+    for (const p of currentPrep) {
+      if (p.batchId && p.amount > 0) {
+        get().incrementBatch(p.batchId, p.amount);
+      }
+    }
     set({ prepItems: [] });
   },
 
   removePrepItem: (id) => {
     sound.playDropImpact();
-    set({ prepItems: get().prepItems.filter((p) => p.id !== id) });
+    const currentPrep = get().prepItems;
+    const itemToRemove = currentPrep.find((p) => p.id === id);
+    // Refund removed item back to its specific batch
+    if (itemToRemove?.batchId && itemToRemove.amount > 0) {
+      get().incrementBatch(itemToRemove.batchId, itemToRemove.amount);
+    }
+    set({ prepItems: currentPrep.filter((p) => p.id !== id) });
   },
 
   toggleMute: () => {
