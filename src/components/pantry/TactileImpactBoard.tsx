@@ -260,12 +260,16 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                   return (
                     <motion.div
                       key={pi.id}
-                      layout
-                      initial={{ scale: 0, y: -20, rotate: -15 }}
-                      animate={{ scale: 1, y: 0, rotate: 0 }}
-                      exit={{ scale: 0, opacity: 0, y: 15 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                      className="group/item relative flex items-center space-x-2 bg-[#2c1f16] border border-[#5a4430] rounded-xl px-2.5 py-1.5 shadow-md hover:border-[#cc5a35] transition-all select-none"
+                      layout="position"
+                      initial={{ scale: 0.75, y: -16, opacity: 0, rotate: -8 }}
+                      animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
+                      exit={{ scale: 0.7, opacity: 0, y: 12, transition: { duration: 0.18, ease: 'easeOut' } }}
+                      transition={{
+                        layout: { type: 'spring', stiffness: 350, damping: 28, mass: 0.8 },
+                        scale: { type: 'spring', stiffness: 380, damping: 26 },
+                        y: { type: 'spring', stiffness: 380, damping: 26 },
+                      }}
+                      className="group/item relative flex items-center space-x-2 bg-[#2c1f16] border border-[#5a4430] rounded-xl px-2.5 py-1.5 shadow-md hover:border-[#cc5a35] transition-[border-color,background-color] duration-150 select-none"
                     >
                       <div className="relative w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center">
                         <Image

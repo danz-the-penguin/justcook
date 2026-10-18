@@ -334,8 +334,6 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     if (targetBatch) {
       if (!isSpice) {
         sound.playKnifeChop();
-        setIsSlicing(true);
-        setTimeout(() => setIsSlicing(false), 280);
       }
       decrementBatch(targetBatch.id, currentStep.val);
     }
@@ -450,66 +448,72 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           className="relative min-h-[190px] sm:min-h-[230px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
           {/* Top Focus Banner: Clean, non-overlapping controller for the selected batch */}
-          {focusedBatch && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full mb-3 px-3.5 py-2 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between shadow-2xs z-20"
-            >
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
-                <span className="font-serif text-sm sm:text-base font-medium text-[#201b16] capitalize">
-                  {focusedBatch.size || 'medium'} Batch
-                </span>
-                <span className="text-xs font-mono font-bold text-[#cc5a35] bg-white px-2 py-0.5 rounded-md border border-[#f0d9cf]">
-                  {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={handleDecrement}
-                  className="w-7 h-7 rounded-lg bg-white hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-sm flex items-center justify-center border border-[#e8e2d8] shadow-2xs transition-all active:scale-90 cursor-pointer"
-                  title={`Subtract ${currentStep.label} from this ${focusedBatch.size || 'medium'} batch`}
-                >
-                  -
-                </button>
-                <span className="text-xs font-mono font-bold text-[#cc5a35] px-1">
-                  ±{currentStep.label}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleIncrement}
-                  className="w-7 h-7 rounded-lg bg-[#cc5a35] hover:bg-[#b54926] text-white font-bold text-sm flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
-                  title={`Add ${currentStep.label} to this ${focusedBatch.size || 'medium'} batch`}
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFocusedBatchId(null)}
-                  className="ml-1 text-xs text-[#8c8276] hover:text-[#201b16] font-medium p-1 hover:bg-white/80 rounded-md transition-colors"
-                  title="Deselect"
-                >
-                  ✕
-                </button>
-              </div>
-            </motion.div>
-          )}
+          <AnimatePresence>
+            {focusedBatch && (
+              <motion.div
+                key={focusedBatch.id}
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full overflow-hidden z-20"
+              >
+                <div className="w-full px-3.5 py-2 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
+                    <span className="font-serif text-sm sm:text-base font-medium text-[#201b16] capitalize">
+                      {focusedBatch.size || 'medium'} Batch
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#cc5a35] bg-white px-2 py-0.5 rounded-md border border-[#f0d9cf]">
+                      {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      type="button"
+                      onClick={handleDecrement}
+                      className="w-7 h-7 rounded-lg bg-white hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-sm flex items-center justify-center border border-[#e8e2d8] shadow-2xs transition-all active:scale-90 cursor-pointer"
+                      title={`Subtract ${currentStep.label} from this ${focusedBatch.size || 'medium'} batch`}
+                    >
+                      -
+                    </button>
+                    <span className="text-xs font-mono font-bold text-[#cc5a35] px-1">
+                      ±{currentStep.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleIncrement}
+                      className="w-7 h-7 rounded-lg bg-[#cc5a35] hover:bg-[#b54926] text-white font-bold text-sm flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
+                      title={`Add ${currentStep.label} to this ${focusedBatch.size || 'medium'} batch`}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFocusedBatchId(null)}
+                      className="ml-1 text-xs text-[#8c8276] hover:text-[#201b16] font-medium p-1 hover:bg-white/80 rounded-md transition-colors"
+                      title="Deselect"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* Knife Blade Slash Flash Effect on Slice */}
+          {/* Knife Blade Slash Warm Gleam on Chop to Pan / Prep Drop */}
           <AnimatePresence>
             {isSlicing && (
               <motion.div
                 initial={{ opacity: 0, x: -100, y: -40 }}
-                animate={{ opacity: [0, 1, 0], x: [-60, 140], y: [-30, 70] }}
+                animate={{ opacity: [0, 0.9, 0], x: [-60, 140], y: [-30, 70] }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden rounded-xl"
+                transition={{ duration: 0.24, ease: 'easeOut' }}
+                className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden rounded-2xl"
               >
-                <div className="w-[180%] h-1 bg-gradient-to-r from-transparent via-white to-transparent shadow-[0_0_12px_rgba(255,255,255,1),0_0_24px_rgba(204,90,53,0.8)] -rotate-12" />
+                <div className="w-[180%] h-1 bg-gradient-to-r from-transparent via-[#fff5eb] to-transparent shadow-[0_0_10px_rgba(255,255,255,0.9),0_0_20px_rgba(204,90,53,0.6)] -rotate-12" />
               </motion.div>
             )}
           </AnimatePresence>
@@ -523,9 +527,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 return (
                   <motion.div
                     key={s.id}
+                    layout="position"
                     drag
                     dragSnapToOrigin
                     dragElastic={0.25}
+                    whileHover={{ scale: s.scaleFactor * 1.05 }}
                     whileDrag={{
                       scale: s.scaleFactor * 1.15,
                       rotate: idx % 2 === 0 ? 6 : -6,
@@ -541,26 +547,36 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
                     }}
                     onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
-                    initial={{ scale: 0, opacity: 0, y: -8 }}
-                    animate={{ scale: s.scaleFactor, opacity: 1, y: 0, rotate: idx % 3 === 0 ? -2 : idx % 3 === 1 ? 2 : 0 }}
-                    exit={{
-                      scale: 0,
-                      opacity: 0,
-                      transition: { duration: 0.15 },
+                    initial={{ scale: 0.72, opacity: 0, y: -6 }}
+                    animate={{
+                      scale: s.scaleFactor,
+                      opacity: 1,
+                      y: 0,
+                      rotate: idx % 3 === 0 ? -2 : idx % 3 === 1 ? 2 : 0,
                     }}
-                    transition={{ type: 'spring', stiffness: 450, damping: 28 }}
-                    className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transform-gpu transition-all ${
+                    exit={{
+                      scale: 0.68,
+                      opacity: 0,
+                      transition: { duration: 0.18, ease: 'easeOut' },
+                    }}
+                    transition={{
+                      layout: { type: 'spring', stiffness: 350, damping: 28, mass: 0.8 },
+                      scale: { type: 'spring', stiffness: 380, damping: 28 },
+                      opacity: { duration: 0.2, ease: 'easeOut' },
+                      rotate: { type: 'spring', stiffness: 350, damping: 28 },
+                    }}
+                    className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-[box-shadow,background-color,opacity] duration-200 ease-out ${
                       isFocused
                         ? 'ring-2.5 ring-[#cc5a35] ring-offset-3 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/40 shadow-sm p-2 z-20'
                         : focusedBatchId
-                        ? 'opacity-40 hover:opacity-100 transition-opacity p-2'
-                        : 'hover:scale-105 p-2'
+                        ? 'opacity-40 hover:opacity-100 p-2'
+                        : 'p-2'
                     }`}
                     title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Tap to focus & adjust, or drag to pan`}
                   >
                   {s.isJar ? (
                     /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
-                    <div className="relative flex flex-col items-center justify-center p-1.5 hover:scale-105 transition-transform select-none">
+                    <div className="relative flex flex-col items-center justify-center p-1.5 select-none">
                       <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
                         <Image
                           src={assetSrc}
@@ -576,15 +592,15 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           title={`Fill level: ${s.fillPercent}% (${s.fillStatus})`}
                         >
                           <div
-                            className="w-full rounded-full transition-all duration-300"
+                            className="w-full rounded-full transition-[height,background-color] duration-500 ease-out"
                             style={{
                               height: `${s.fillPercent}%`,
                               backgroundColor:
                                 (s.fillPercent || 100) > 40
-                                  ? '#cc5a35'
-                                  : (s.fillPercent || 100) > 20
-                                  ? '#d97706'
-                                  : '#dc2626',
+                                   ? '#cc5a35'
+                                   : (s.fillPercent || 100) > 20
+                                   ? '#d97706'
+                                   : '#dc2626',
                             }}
                           />
                         </div>
@@ -643,9 +659,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         />
                       </div>
 
-                      {/* Foreground Clipped Slice */}
+                      {/* Foreground Clipped Slice with smooth clip-path morph */}
                       <div
-                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none transition-[clip-path] duration-300 ease-out"
                         style={{
                           clipPath: `inset(0 ${Math.round((1 - s.fraction) * 1000) / 10}% 0 0)`,
                         }}
@@ -659,9 +675,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         />
                       </div>
 
-                      {/* Knife Cut Line Edge */}
+                      {/* Knife Cut Line Edge with smooth horizontal glide */}
                       <div
-                        className="absolute top-1 bottom-1 w-[1.5px] border-r border-dashed border-[#cc5a35]/80 pointer-events-none"
+                        className="absolute top-1 bottom-1 w-[1.5px] border-r border-dashed border-[#cc5a35]/80 pointer-events-none transition-[left] duration-300 ease-out"
                         style={{
                           left: `${Math.round(s.fraction * 1000) / 10}%`,
                         }}
@@ -765,7 +781,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
         {/* Quantity display with fractions & focused batch indicator */}
         <div className="flex flex-col shrink-0">
           <div className="flex items-baseline space-x-1.5">
-            <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16]">
+            <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
               {formatQuantityWithCulinaryFraction(totalQty).display}
             </span>
             <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
@@ -773,7 +789,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           {focusedBatch && (
             <div className="flex items-center space-x-1 text-[11px] font-sans text-[#cc5a35] font-semibold">
               <span className="capitalize">{focusedBatch.size || 'medium'} batch:</span>
-              <span className="font-mono">
+              <span className="font-mono tabular-nums">
                 {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
               </span>
               <button
@@ -797,7 +813,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           <button
             onClick={handleDecrement}
             disabled={totalQty <= 0}
-            className={`w-10 h-10 rounded-xl active:scale-90 disabled:opacity-30 flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+            className={`w-10 h-10 rounded-xl active:scale-95 disabled:opacity-30 flex items-center justify-center transition-all duration-150 shrink-0 cursor-pointer ${
               focusedBatch
                 ? 'bg-[#faeee8] hover:bg-[#f5e3db] text-[#9e3a19] border border-[#f0d9cf] ring-1 ring-[#e69374]'
                 : 'bg-[#f2ede4] hover:bg-[#e5dec9] text-[#201b16]'
@@ -810,7 +826,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           {/* Increment Stepper */}
           <button
             onClick={handleIncrement}
-            className={`w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] active:scale-90 text-white flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer ${
+            className={`w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] active:scale-95 text-white flex items-center justify-center transition-all duration-150 shadow-xs shrink-0 cursor-pointer ${
               focusedBatch ? 'ring-2 ring-[#cc5a35] ring-offset-1' : ''
             }`}
             title={`Add ${currentStep.label}${focusedBatch ? ` to ${focusedBatch.size || 'medium'} batch` : ''}`}
