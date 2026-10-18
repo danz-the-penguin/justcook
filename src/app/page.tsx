@@ -154,7 +154,7 @@ export default function PantryKitchenPage() {
               {/* Brass Guard Rail Line */}
               <div className="h-1.5 w-full bg-gradient-to-r from-[#8a6d2f] via-[#d4af37] to-[#8a6d2f] rounded-full mb-6 shadow-sm opacity-90" />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8 items-start">
                 {displayedItems.map((item) => (
                   <TactileAssetCard
                     key={item.id}
@@ -172,7 +172,7 @@ export default function PantryKitchenPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8 items-start">
               {displayedItems.map((item) => (
                 <TactileAssetCard
                   key={item.id}

@@ -477,102 +477,108 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
               setFocusedBatchId(null);
             }
           }}
-          className="relative min-h-[190px] sm:min-h-[230px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
+          className="relative min-h-[170px] sm:min-h-[200px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-3 sm:p-4 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
-          {/* Multi-Batch Switcher / Group Overview Bar */}
+          {/* Artisanal Segmented Group Filter Tabs */}
           {hasMultipleBatches && !isSpice && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="w-full flex items-center justify-between gap-1.5 pb-2.5 mb-2.5 border-b border-[#efeae1] overflow-x-auto no-scrollbar z-20"
+              className="w-full flex items-center justify-between gap-1.5 pb-2 mb-2 border-b border-[#efeae1]/80 overflow-x-auto no-scrollbar z-20"
             >
               <div className="flex items-center space-x-1.5">
-                <span className="text-[10px] font-sans font-bold text-[#787067] uppercase tracking-wider shrink-0">
-                  Groups:
-                </span>
+                {/* "All" Segment Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFocusedBatchId(null);
+                    sound.playWoodTap();
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-sans transition-all shrink-0 cursor-pointer ${
+                    !focusedBatchId
+                      ? 'bg-[#201b16] text-[#faf8f5] font-medium shadow-2xs'
+                      : 'bg-white hover:bg-[#f2ede4] text-[#685f54] border border-[#e5dec9]'
+                  }`}
+                >
+                  All ({formatQuantityWithCulinaryFraction(totalQty).display})
+                </button>
+
+                {/* Individual Group Tabs */}
                 {activeBatches.map((b, idx) => {
                   const isBSelected = focusedBatchId === b.id;
                   const days = b.daysLeft ?? 7;
                   const isUrgent = days <= 1;
                   const isSoon = days <= 3 && !isUrgent;
+                  const sizeName = b.size ? b.size.charAt(0).toUpperCase() + b.size.slice(1) : `Group ${idx + 1}`;
                   return (
                     <button
                       key={b.id}
                       type="button"
                       onClick={() => {
-                        setFocusedBatchId((prev) => (prev === b.id ? null : b.id));
+                        setFocusedBatchId(b.id);
                         sound.playWoodTap();
                       }}
                       className={`px-2.5 py-1 rounded-xl text-xs font-sans transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer ${
                         isBSelected
-                          ? 'bg-[#cc5a35] text-white font-semibold shadow-xs ring-1 ring-[#cc5a35]'
-                          : 'bg-white hover:bg-[#faeee8] text-[#201b16] border border-[#e5dec9]'
+                          ? 'bg-[#cc5a35] text-white font-medium shadow-2xs'
+                          : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border border-[#e5dec9]'
                       }`}
-                      title={`Group ${idx + 1} (${b.size || 'medium'}): ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left. Click to focus`}
+                      title={`${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
                     >
-                      <span className="capitalize">{b.size ? `${b.size.charAt(0).toUpperCase()} ` : ''}Gr.{idx + 1}</span>
-                      <span className="font-mono text-[11px] opacity-90">
-                        ({formatQuantityWithCulinaryFraction(b.quantity).display})
+                      <span>{sizeName}</span>
+                      <span className="font-mono text-[11px] opacity-85">
+                        {formatQuantityWithCulinaryFraction(b.quantity).display}
                       </span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-tight ${
-                          isBSelected
-                            ? 'bg-white/20 text-white'
-                            : isUrgent
-                            ? 'bg-[#faeee8] text-[#9e3a19]'
-                            : isSoon
-                            ? 'bg-[#fef6ee] text-[#a15c07]'
-                            : 'bg-[#edf5ee] text-[#2d5930]'
-                        }`}
-                      >
-                        {isUrgent ? '🚨 1d' : `${days}d`}
-                      </span>
+                      {isUrgent ? (
+                        <span className="text-[10px] font-bold text-red-500">🚨 1d</span>
+                      ) : isSoon ? (
+                        <span className="text-[10px] font-bold text-amber-600">⏳ {days}d</span>
+                      ) : null}
                     </button>
                   );
                 })}
               </div>
 
+              {/* Add New Group Button */}
               <button
                 type="button"
                 onClick={handleAddNewBatch}
-                className="text-xs font-sans font-medium text-[#cc5a35] hover:text-[#9e3a19] px-2 py-1 rounded-xl bg-white hover:bg-[#faeee8] border border-dashed border-[#cc5a35]/40 transition-colors shrink-0 flex items-center space-x-1 cursor-pointer"
-                title="Add another group of tomatoes with separate expiry date"
+                className="w-7 h-7 rounded-xl bg-white hover:bg-[#faeee8] text-[#cc5a35] hover:text-[#9e3a19] border border-dashed border-[#cc5a35]/50 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs"
+                title="Add another group with separate expiry date"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Add Group</span>
               </button>
             </div>
           )}
 
-          {/* Top Focus Banner: Clean, non-overlapping controller for the selected batch */}
+          {/* Active Group Context Strip (Slim & Elegant - no duplicate stepper buttons) */}
           <AnimatePresence>
             {focusedBatch && (
               <motion.div
                 key={focusedBatch.id}
                 initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
                 exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full overflow-hidden z-20"
               >
-                <div className="w-full px-3.5 py-2 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between shadow-2xs">
-                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
-                    <span className="font-serif text-sm sm:text-base font-medium text-[#201b16] capitalize">
-                      {hasMultipleBatches
-                        ? `Group ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'})`
-                        : `${focusedBatch.size || 'medium'} Batch`}
+                <div className="w-full px-2.5 py-1 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
+                    <span className="font-serif font-medium text-[#201b16] capitalize">
+                      {focusedBatch.size || 'medium'} Group:
                     </span>
-                    <span className="text-xs font-mono font-bold text-[#cc5a35] bg-white px-2 py-0.5 rounded-md border border-[#f0d9cf]">
+                    <span className="font-mono font-bold text-[#cc5a35]">
                       {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
                     </span>
+                  </div>
 
-                    {/* Direct Expiry Date Pill & Editor Button */}
+                  <div className="flex items-center space-x-1.5">
                     <button
                       type="button"
                       onClick={() => onEditBatch(focusedBatch, item)}
-                      className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors"
-                      title="Click to view & change expiration date or size for this group"
+                      className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
+                      title="Edit expiry date or size"
                     >
                       <Calendar className="w-3 h-3 text-[#cc5a35]" />
                       <span>
@@ -581,36 +587,16 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                             ? '🚨 Expired'
                             : focusedBatch.daysLeft === 1
                             ? '🚨 1d left'
-                            : `⏳ ${focusedBatch.daysLeft}d left`
+                            : `Fresh (${focusedBatch.daysLeft}d)`
                           : 'Set Date'}
                       </span>
                     </button>
-                  </div>
-                  <div className="flex items-center space-x-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={handleDecrement}
-                      className="w-7 h-7 rounded-lg bg-white hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-sm flex items-center justify-center border border-[#e8e2d8] shadow-2xs transition-all active:scale-90 cursor-pointer"
-                      title={`Subtract ${currentStep.label} from this ${focusedBatch.size || 'medium'} batch`}
-                    >
-                      -
-                    </button>
-                    <span className="text-xs font-mono font-bold text-[#cc5a35] px-1">
-                      ±{currentStep.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleIncrement}
-                      className="w-7 h-7 rounded-lg bg-[#cc5a35] hover:bg-[#b54926] text-white font-bold text-sm flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
-                      title={`Add ${currentStep.label} to this ${focusedBatch.size || 'medium'} batch`}
-                    >
-                      +
-                    </button>
+
                     <button
                       type="button"
                       onClick={() => setFocusedBatchId(null)}
-                      className="ml-1 text-xs text-[#8c8276] hover:text-[#201b16] font-medium p-1 hover:bg-white/80 rounded-md transition-colors"
-                      title="Deselect"
+                      className="text-xs text-[#8c8276] hover:text-[#201b16] px-1 hover:bg-white rounded transition-colors"
+                      title="View all groups"
                     >
                       ✕
                     </button>
@@ -635,12 +621,18 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
             )}
           </AnimatePresence>
 
-          {/* Visual Sprites Area: Spacious flex grid with breathing room */}
-          <div className="w-full flex-1 flex flex-wrap items-center justify-center gap-4 sm:gap-6 py-2">
+          {/* Visual Sprites Area: Responsive, elegant layout */}
+          <div className="w-full flex-1 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 py-1.5">
             <AnimatePresence mode="popLayout">
               {sprites.map((s, idx) => {
                 const spriteAmount = s.isPartial ? s.fraction : (isSpice ? currentStep.val : 1);
                 const isFocused = Boolean(s.batchId && s.batchId === focusedBatchId);
+                const isCompact = sprites.length > 4;
+                const spriteSizeClass = isCompact
+                  ? 'w-16 h-16 sm:w-20 sm:h-20'
+                  : 'w-20 h-20 sm:w-24 sm:h-24';
+                const imageSize = isCompact ? 80 : 96;
+
                 return (
                   <motion.div
                     key={s.id}
@@ -651,9 +643,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                     whileHover={{ scale: s.scaleFactor * 1.05 }}
                     whileDrag={{
                       scale: s.scaleFactor * 1.15,
-                      rotate: idx % 2 === 0 ? 6 : -6,
+                      rotate: idx % 2 === 0 ? 5 : -5,
                       zIndex: 9999,
-                      opacity: 0.92,
+                      opacity: 0.95,
                     }}
                     whileTap={{ scale: s.scaleFactor * 0.95 }}
                     onDragStart={() => {
@@ -684,23 +676,23 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                     }}
                     className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-[box-shadow,background-color,opacity] duration-200 ease-out ${
                       isFocused
-                        ? 'ring-2.5 ring-[#cc5a35] ring-offset-3 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/40 shadow-sm p-2 z-20'
+                        ? 'rounded-2xl ring-2 ring-[#cc5a35] ring-offset-2 ring-offset-[#faf8f5] bg-white shadow-sm p-1.5 z-20'
                         : focusedBatchId
-                        ? 'opacity-40 hover:opacity-100 p-2'
-                        : 'p-2'
+                        ? 'opacity-35 hover:opacity-85 p-1.5'
+                        : 'p-1.5'
                     }`}
                     title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Tap to focus & adjust, or drag to pan`}
                   >
                   {s.isJar ? (
                     /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
-                    <div className="relative flex flex-col items-center justify-center p-1.5 select-none">
-                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                    <div className="relative flex flex-col items-center justify-center p-1 select-none">
+                      <div className={`relative ${spriteSizeClass} flex items-center justify-center`}>
                         <Image
                           src={assetSrc}
                           alt={item.name}
-                          width={96}
-                          height={96}
-                          className="object-contain pointer-events-none drop-shadow-md max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                          width={imageSize}
+                          height={imageSize}
+                          className="object-contain pointer-events-none drop-shadow-md max-h-full max-w-full"
                           priority={idx < 4}
                         />
                         {/* Dynamic Glass Level Gauge */}
@@ -743,35 +735,28 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                     </div>
                   ) : !s.isPartial ? (
                     /* Full Whole Sprite - Spacious & Clear */
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                    <div className={`relative ${spriteSizeClass} flex items-center justify-center`}>
                       <Image
                         src={assetSrc}
                         alt={item.name}
-                        width={96}
-                        height={96}
-                        className="object-contain pointer-events-none drop-shadow-sm max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                        width={imageSize}
+                        height={imageSize}
+                        className="object-contain pointer-events-none drop-shadow-sm max-h-full max-w-full"
                         priority={idx < 4}
                       />
-                      {/* Group Expiry Badge when multiple batches exist */}
-                      {hasMultipleBatches && s.daysLeft !== undefined && (
+                      {/* Urgent Expiry Alert Badge ONLY when critical (≤ 2 days) */}
+                      {s.daysLeft !== undefined && s.daysLeft <= 2 && (
                         <span
-                          className={`absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full shadow-2xs border border-white/80 leading-tight ${
-                            s.daysLeft <= 1
-                              ? 'bg-[#faeee8] text-[#9e3a19] border-[#f0d9cf]'
-                              : s.daysLeft <= 3
-                              ? 'bg-[#fef6ee] text-[#a15c07] border-[#fae4c8]'
-                              : 'bg-[#edf5ee] text-[#2d5930] border-[#d2e7d3]'
-                          }`}
-                          title={`Group ${(s.batchIndex ?? 0) + 1}: ${s.daysLeft}d left`}
+                          className="absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full shadow-2xs bg-[#faeee8] text-[#9e3a19] border border-[#f0d9cf] leading-none"
+                          title={`Cook soon: ${s.daysLeft <= 0 ? 'Expired' : `${s.daysLeft}d left`}`}
                         >
-                          {s.daysLeft <= 1 ? '🚨 1d' : `${s.daysLeft}d`}
+                          {s.daysLeft <= 0 ? '🚨 Exp' : `🚨 ${s.daysLeft}d`}
                         </span>
                       )}
-                      {s.sizeTier !== 'medium' && (
+                      {/* Subtly indicate non-medium size tier when multiple batches exist */}
+                      {hasMultipleBatches && s.sizeTier !== 'medium' && (
                         <span
-                          className={`absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs border border-white/70 leading-none ${
-                            s.sizeTier === 'small' ? 'bg-[#2d5930] text-white' : 'bg-[#cc5a35] text-white'
-                          }`}
+                          className="absolute -bottom-1 -right-1 z-10 text-[9px] font-sans font-bold px-1.5 py-0.5 rounded-md shadow-2xs bg-white/95 text-[#685f54] border border-[#ded7cb] leading-none"
                         >
                           {s.sizeTier === 'small' ? 'S' : 'L'}
                         </span>
@@ -779,15 +764,15 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                     </div>
                   ) : (
                     /* Fractional Cut Slice Sprite (1/8, 1/4, 1/3, 1/2, etc.) */
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                    <div className={`relative ${spriteSizeClass} flex items-center justify-center`}>
                       {/* Background Silhouette Ghost */}
                       <div className="absolute inset-0 flex items-center justify-center opacity-25 grayscale pointer-events-none">
                         <Image
                           src={assetSrc}
                           alt={item.name}
-                          width={96}
-                          height={96}
-                          className="object-contain max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                          width={imageSize}
+                          height={imageSize}
+                          className="object-contain max-h-full max-w-full"
                         />
                       </div>
 
@@ -801,9 +786,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         <Image
                           src={assetSrc}
                           alt={item.name}
-                          width={96}
-                          height={96}
-                          className="object-contain drop-shadow-sm max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                          width={imageSize}
+                          height={imageSize}
+                          className="object-contain drop-shadow-sm max-h-full max-w-full"
                         />
                       </div>
 
@@ -815,33 +800,21 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         }}
                       />
 
-                      {/* Group Expiry Badge on Slice */}
-                      {hasMultipleBatches && s.daysLeft !== undefined && (
+                      {/* Urgent Expiry Alert Badge on Slice ONLY when critical (≤ 2 days) */}
+                      {s.daysLeft !== undefined && s.daysLeft <= 2 && (
                         <span
-                          className={`absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full shadow-2xs border border-white/80 leading-tight ${
-                            s.daysLeft <= 1
-                              ? 'bg-[#faeee8] text-[#9e3a19] border-[#f0d9cf]'
-                              : s.daysLeft <= 3
-                              ? 'bg-[#fef6ee] text-[#a15c07] border-[#fae4c8]'
-                              : 'bg-[#edf5ee] text-[#2d5930] border-[#d2e7d3]'
-                          }`}
-                          title={`Group ${(s.batchIndex ?? 0) + 1}: ${s.daysLeft}d left`}
+                          className="absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full shadow-2xs bg-[#faeee8] text-[#9e3a19] border border-[#f0d9cf] leading-none"
+                          title={`Cook soon: ${s.daysLeft <= 0 ? 'Expired' : `${s.daysLeft}d left`}`}
                         >
-                          {s.daysLeft <= 1 ? '🚨 1d' : `${s.daysLeft}d`}
+                          {s.daysLeft <= 0 ? '🚨 Exp' : `🚨 ${s.daysLeft}d`}
                         </span>
                       )}
 
                       {/* Fraction & Size Pill Tag */}
                       <span
-                        className={`absolute -bottom-1 -right-1 z-10 text-[11px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs border border-white/70 leading-none ${
-                          s.sizeTier === 'small'
-                            ? 'bg-[#2d5930] text-white'
-                            : s.sizeTier === 'large'
-                            ? 'bg-[#cc5a35] text-white'
-                            : 'bg-[#201b16] text-[#faf8f5]'
-                        }`}
+                        className="absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs bg-[#201b16] text-[#faf8f5] border border-white/60 leading-none"
                       >
-                        {s.fractionLabel}{s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
+                        {s.fractionLabel}{hasMultipleBatches && s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
                       </span>
                     </div>
                   )}
@@ -927,31 +900,34 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       {/* Bottom Controls Bar */}
       <div className="mt-2 pt-2 border-t border-dashed border-[#efeae1] flex items-center justify-between gap-2">
         {/* Quantity display with fractions & focused batch indicator */}
-        <div className="flex flex-col shrink-0">
+        <div className="flex flex-col shrink-0 min-w-0">
           <div className="flex items-baseline space-x-1.5">
             <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
-              {formatQuantityWithCulinaryFraction(totalQty).display}
+              {formatQuantityWithCulinaryFraction(focusedBatch ? focusedBatch.quantity : totalQty).display}
             </span>
             <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
           </div>
-          {focusedBatch && (
+          {focusedBatch ? (
             <div className="flex items-center space-x-1 text-[11px] font-sans text-[#cc5a35] font-semibold">
-              <span className="capitalize">{focusedBatch.size || 'medium'} batch:</span>
-              <span className="font-mono tabular-nums">
-                {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
-              </span>
+              <span className="capitalize">{focusedBatch.size || 'medium'} group</span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setFocusedBatchId(null);
                 }}
-                className="ml-1 text-[10px] text-[#8c8276] hover:text-[#201b16] font-bold"
-                title="Deselect batch"
+                className="ml-1 text-[10px] text-[#8c8276] hover:text-[#201b16] font-bold p-0.5 hover:underline cursor-pointer"
+                title="View total quantity across all groups"
               >
-                ✕
+                (✕ Show All)
               </button>
             </div>
+          ) : (
+            hasMultipleBatches && (
+              <span className="text-[11px] font-sans text-[#8c8276]">
+                {activeBatches.length} groups on shelf
+              </span>
+            )
           )}
         </div>
 
