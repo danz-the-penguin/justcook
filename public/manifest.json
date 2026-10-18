@@ -1,0 +1,18 @@
+{
+  "name": "JustCook — Tactile Kitchen Pantry",
+  "short_name": "JustCook",
+  "description": "Tactile zero-waste kitchen pantry manager and culinary companion.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#faf8f5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

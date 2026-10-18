@@ -16,12 +16,17 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Pantry Chef • Tactile Kitchen & Recipe Matcher',
+  title: 'JustCook • Tactile Kitchen & Recipe Matcher',
   description: 'An interactive, tactile kitchen companion to cook with what you have and prevent food waste.',
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/app-icon.svg',
+    apple: '/app-icon.svg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Pantry Chef',
+    title: 'JustCook',
   },
 };
 

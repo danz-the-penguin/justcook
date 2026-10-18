@@ -13,18 +13,64 @@ interface TactileImpactBoardProps {
   onCookPrepared?: () => void;
 }
 
+interface SizzleParticle {
+  id: number;
+  type: 'steam' | 'sparkle';
+  x: number;
+  targetX: number;
+  targetY: number;
+  size: number;
+  duration: number;
+  delay: number;
+}
+
 export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) {
   const { prepItems, clearPrepItems, removePrepItem, isPrepBoardOpen, setPrepBoardOpen } = usePantryStore();
   const [lastImpactTime, setLastImpactTime] = useState<number>(0);
   const [impactSlug, setImpactSlug] = useState<string | null>(null);
+  const [particles, setParticles] = useState<SizzleParticle[]>([]);
 
-  // Trigger visual impact flash whenever prepItems updates
+  // Trigger visual impact flash & steam/sizzle particles whenever prepItems updates
   React.useEffect(() => {
     if (prepItems.length > 0) {
       const latest = prepItems[prepItems.length - 1];
       setImpactSlug(latest.slug);
       setLastImpactTime(Date.now());
-      const timer = setTimeout(() => setImpactSlug(null), 600);
+
+      const now = Date.now();
+      const newParticles: SizzleParticle[] = [];
+      // 8 soft steam puffs
+      for (let i = 0; i < 8; i++) {
+        newParticles.push({
+          id: now + i,
+          type: 'steam',
+          x: 35 + Math.random() * 30,
+          targetX: (Math.random() - 0.5) * 60,
+          targetY: -(30 + Math.random() * 50),
+          size: 20 + Math.random() * 24,
+          duration: 0.9 + Math.random() * 0.4,
+          delay: Math.random() * 0.15,
+        });
+      }
+      // 8 golden grease sparks
+      for (let i = 8; i < 16; i++) {
+        newParticles.push({
+          id: now + i,
+          type: 'sparkle',
+          x: 45 + Math.random() * 10,
+          targetX: (Math.random() - 0.5) * 110,
+          targetY: -(20 + Math.random() * 45),
+          size: 3 + Math.random() * 4,
+          duration: 0.45 + Math.random() * 0.25,
+          delay: Math.random() * 0.08,
+        });
+      }
+      setParticles(newParticles);
+
+      const timer = setTimeout(() => {
+        setImpactSlug(null);
+        setParticles([]);
+      }, 1300);
       return () => clearTimeout(timer);
     }
   }, [prepItems]);
@@ -130,7 +176,7 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
             {/* Skillet Hot Surface Drop Zone */}
             <div
               id="prep-board-dropzone"
-              className={`relative min-h-[96px] sm:min-h-[116px] rounded-2xl p-3 border-2 border-dashed transition-all flex flex-wrap items-center justify-center gap-3 overflow-hidden ${
+              className={`relative min-h-[96px] sm:min-h-[116px] rounded-2xl p-3 border-2 border-dashed transition-all flex flex-wrap items-center justify-center gap-3 overflow-visible ${
                 impactSlug
                   ? 'bg-[#cc5a35]/20 border-[#cc5a35] shadow-[inset_0_0_24px_rgba(204,90,53,0.4)]'
                   : 'bg-[#18100b]/80 border-[#4a3726] hover:border-[#cc5a35]/60'
@@ -152,6 +198,44 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                     </span>
                   </motion.div>
                 )}
+              </AnimatePresence>
+
+              {/* Dynamic Steam & Sizzle Pan Particles */}
+              <AnimatePresence>
+                {particles.map((p) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{
+                      opacity: p.type === 'steam' ? 0.65 : 1,
+                      scale: p.type === 'steam' ? 0.5 : 1,
+                      x: 0,
+                      y: 0,
+                    }}
+                    animate={{
+                      opacity: 0,
+                      scale: p.type === 'steam' ? [0.5, 1.3, 2.1] : [1, 1.6, 0],
+                      x: p.targetX,
+                      y: p.targetY,
+                    }}
+                    exit={{ opacity: 0 }}
+                    transition={{
+                      duration: p.duration,
+                      delay: p.delay,
+                      ease: 'easeOut',
+                    }}
+                    style={{
+                      left: `${p.x}%`,
+                      top: '50%',
+                      width: p.size,
+                      height: p.size,
+                    }}
+                    className={`absolute pointer-events-none z-30 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                      p.type === 'steam'
+                        ? 'bg-white/40 blur-xs'
+                        : 'bg-amber-300 shadow-[0_0_8px_#fbbf24]'
+                    }`}
+                  />
+                ))}
               </AnimatePresence>
 
               {/* Empty State / Prompt */}

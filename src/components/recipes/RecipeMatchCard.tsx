@@ -296,6 +296,23 @@ export function RecipeMatchCard({
           </div>
         </div>
 
+        {/* Substitutions Available Callout Banner */}
+        {ingredientsDetail.some((i) => i.substitution) && (
+          <div className="mb-4 bg-[#fef8f0] border border-[#fae4c8] rounded-xl p-3 text-xs text-[#8a520a] space-y-1">
+            <div className="font-semibold flex items-center space-x-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#cc7a19]" />
+              <span>Smart Pantry Substitutions:</span>
+            </div>
+            {ingredientsDetail
+              .filter((i) => i.substitution)
+              .map((i, sIdx) => (
+                <div key={sIdx} className="text-[11px] leading-relaxed text-[#754407] pl-5">
+                  • <strong className="capitalize">{i.name}</strong>: {i.substitution?.note} (Use {i.substitution?.substituteItems.map((s) => s.name).join(' + ')})
+                </div>
+              ))}
+          </div>
+        )}
+
         {/* 1-Tap Add Missing to Shopping List */}
         {missingList.length > 0 && (
           <div className="mb-4">

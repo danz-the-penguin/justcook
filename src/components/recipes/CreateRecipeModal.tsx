@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, ChefHat, Sparkles, Check, Clock, Users, ClipboardPaste } from 'lucide-react';
+import { X, Plus, Trash2, ChefHat, Sparkles, Check, Clock, Users, ClipboardPaste, Globe, ArrowDownToLine, Loader2, AlertCircle } from 'lucide-react';
 import { sound } from '@/lib/audio';
 
 interface CreateRecipeModalProps {
@@ -39,6 +39,57 @@ export function CreateRecipeModal({ isOpen, editingRecipe, onClose, onRecipeCrea
   const [showPasteSteps, setShowPasteSteps] = useState(false);
   const [pasteStepsText, setPasteStepsText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Web Recipe Importer state
+  const [showImportUrl, setShowImportUrl] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImportFromWeb = async () => {
+    if (!importUrl.trim()) return;
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const res = await fetch('/api/recipes/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: importUrl.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && data.recipe) {
+        const r = data.recipe;
+        if (r.title) setTitle(r.title);
+        if (r.description) setDescription(r.description);
+        if (r.imageUrl) setImageUrl(r.imageUrl);
+        if (r.prepTimeMinutes) setPrepTime(r.prepTimeMinutes);
+        if (r.cookTimeMinutes) setCookTime(r.cookTimeMinutes);
+        if (r.servings) setServings(r.servings);
+        if (Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+          setIngredients(
+            r.ingredients.map((ing: any) => ({
+              name: ing.name || '',
+              amount: Number(ing.amount) || 1,
+              unit: ing.unit || 'piece',
+              category: ing.category || 'produce',
+            }))
+          );
+        }
+        if (Array.isArray(r.instructions) && r.instructions.length > 0) {
+          setSteps(r.instructions);
+        }
+        sound.playDing();
+        setShowImportUrl(false);
+        setImportUrl('');
+      } else {
+        setImportError(data.error || 'Could not import recipe from this URL.');
+      }
+    } catch (e: any) {
+      setImportError(e.message || 'Failed to fetch online recipe.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // Sync state when opening for Edit vs Create
   useEffect(() => {
@@ -264,6 +315,71 @@ export function CreateRecipeModal({ isOpen, editingRecipe, onClose, onRecipeCrea
             </p>
           </div>
         </div>
+
+        {/* Quick Web Recipe Importer Bar */}
+        {!isEditing && (
+          <div className="mb-5 bg-white border border-[#e8e2d8] rounded-2xl p-3.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Globe className="w-4 h-4 text-[#cc5a35]" />
+                <span className="text-xs font-sans font-medium text-[#201b16]">
+                  Import Online Recipe
+                </span>
+                <span className="text-[10px] bg-[#faeee8] text-[#cc5a35] font-semibold px-2 py-0.5 rounded-full">
+                  1-Click Auto Fill
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportUrl(!showImportUrl);
+                  setImportError(null);
+                }}
+                className="text-xs text-[#cc5a35] hover:underline font-medium cursor-pointer"
+              >
+                {showImportUrl ? 'Cancel' : '+ Paste URL'}
+              </button>
+            </div>
+
+            {showImportUrl && (
+              <div className="mt-3 pt-3 border-t border-[#f2ede4] space-y-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <input
+                    type="url"
+                    placeholder="Paste link (NYT Cooking, BBC Good Food, Serious Eats, Allrecipes)..."
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-[#faf8f5] border border-[#e5dec9] rounded-xl text-xs font-sans text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleImportFromWeb}
+                    disabled={isImporting || !importUrl.trim()}
+                    className="px-4 py-2 bg-[#cc5a35] hover:bg-[#b54926] text-white text-xs font-sans font-medium rounded-xl shadow-xs transition-all flex items-center justify-center space-x-1.5 disabled:opacity-50 shrink-0 cursor-pointer"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Fetching...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownToLine className="w-3.5 h-3.5" />
+                        <span>Fetch &amp; Auto-Fill</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {importError && (
+                  <p className="text-xs text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{importError}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Title & Description */}

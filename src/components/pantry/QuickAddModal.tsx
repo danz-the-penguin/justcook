@@ -24,8 +24,10 @@ import {
   Trash2,
   FileText,
   Wand2,
+  ScanLine,
 } from 'lucide-react';
 import { sound } from '@/lib/audio';
+import { BarcodeScannerModal } from '@/components/pantry/BarcodeScannerModal';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -147,6 +149,39 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
   const [bulkText, setBulkText] = useState<string>('');
   const [bulkItems, setBulkItems] = useState<ParsedBulkItem[]>([]);
   const [isStockingBulk, setIsStockingBulk] = useState<boolean>(false);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState<boolean>(false);
+
+  const handleProductFromBarcode = async (product: {
+    name: string;
+    category: string;
+    imageUrl?: string;
+    barcode: string;
+  }) => {
+    setIsBarcodeScannerOpen(false);
+    setModalTab('upload');
+    setUploadName(product.name);
+    if (['produce', 'dairy', 'meat', 'pantry', 'frozen', 'spices', 'bakery'].includes(product.category)) {
+      setUploadCategory(product.category);
+    }
+    if (product.imageUrl) {
+      setUploadPreview(product.imageUrl);
+      setRawPreview(product.imageUrl);
+      try {
+        const res = await fetch(product.imageUrl);
+        const blob = await res.blob();
+        const file = new File(
+          [blob],
+          `${product.name.replace(/[^a-z0-9]/gi, '_')}.jpg`,
+          { type: blob.type || 'image/jpeg' }
+        );
+        setUploadFile(file);
+        setRawFile(file);
+      } catch (err) {
+        console.warn('Could not fetch remote barcode image as blob:', err);
+      }
+    }
+    sound.playSuccess();
+  };
 
   // Sync tab with initialTab prop when opening
   useEffect(() => {
@@ -502,14 +537,14 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex p-1 bg-[#f0ebe1] rounded-xl mb-5 gap-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 p-1 bg-[#f0ebe1] rounded-xl mb-5 gap-1">
           <button
             type="button"
             onClick={() => {
               sound.playPop();
               setModalTab('standard');
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-sans font-medium rounded-lg transition-all ${
+            className={`py-2 px-2 text-xs sm:text-sm font-sans font-medium rounded-lg transition-all text-center ${
               modalTab === 'standard'
                 ? 'bg-white text-[#201b16] shadow-2xs font-semibold'
                 : 'text-[#685f54] hover:text-[#201b16]'
@@ -523,7 +558,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
               sound.playPop();
               setModalTab('upload');
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-sans font-medium rounded-lg flex items-center justify-center space-x-1.5 transition-all ${
+            className={`py-2 px-2 text-xs sm:text-sm font-sans font-medium rounded-lg flex items-center justify-center space-x-1.5 transition-all text-center ${
               modalTab === 'upload'
                 ? 'bg-white text-[#cc5a35] shadow-2xs font-semibold'
                 : 'text-[#685f54] hover:text-[#201b16]'
@@ -538,7 +573,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
               sound.playPop();
               setModalTab('bulk');
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-sans font-medium rounded-lg flex items-center justify-center space-x-1.5 transition-all ${
+            className={`py-2 px-2 text-xs sm:text-sm font-sans font-medium rounded-lg flex items-center justify-center space-x-1.5 transition-all text-center ${
               modalTab === 'bulk'
                 ? 'bg-white text-[#cc5a35] shadow-2xs font-semibold'
                 : 'text-[#685f54] hover:text-[#201b16]'
@@ -546,6 +581,17 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Paste Receipt</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              sound.playPop();
+              setIsBarcodeScannerOpen(true);
+            }}
+            className="py-2 px-2 text-xs sm:text-sm font-sans font-medium rounded-lg flex items-center justify-center space-x-1.5 transition-all text-[#685f54] hover:text-[#201b16] hover:bg-white/60 text-center"
+          >
+            <ScanLine className="w-3.5 h-3.5 text-[#cc5a35]" />
+            <span>Scan Barcode</span>
           </button>
         </div>
 
@@ -1137,6 +1183,12 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
           </div>
         )}
       </div>
+
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onProductFound={handleProductFromBarcode}
+      />
     </div>
   );
 }

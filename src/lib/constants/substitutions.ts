@@ -27,10 +27,34 @@ export const CULINARY_SUBSTITUTIONS: Record<string, SubstitutionOption[]> = {
       impact: 'seamless',
     },
   ],
+  'buttermilk': [
+    {
+      substituteItems: [
+        { name: 'Milk', slug: 'milk', amountRatio: 1 },
+        { name: 'Lemon', slug: 'lemon', amountRatio: 0.1 },
+      ],
+      note: 'Stir 1 tbsp lemon juice or vinegar into 1 cup milk and let sit 5 mins.',
+      impact: 'seamless',
+    },
+  ],
   'butter': [
     {
       substituteItems: [{ name: 'Olive Oil', slug: 'olive_oil', amountRatio: 0.75 }],
       note: 'Use 3/4 amount of olive oil in cooking and sauteing.',
+      impact: 'minor_difference',
+    },
+  ],
+  'egg': [
+    {
+      substituteItems: [{ name: 'Yogurt', slug: 'yogurt', amountRatio: 0.25 }],
+      note: '1/4 cup yogurt or applesauce binds moisture in baking.',
+      impact: 'minor_difference',
+    },
+  ],
+  'parmesan': [
+    {
+      substituteItems: [{ name: 'Cheddar Cheese', slug: 'cheese', amountRatio: 1 }],
+      note: 'Finely grated cheddar melts rich and savory over pasta.',
       impact: 'minor_difference',
     },
   ],
@@ -54,6 +78,11 @@ export const CULINARY_SUBSTITUTIONS: Record<string, SubstitutionOption[]> = {
       note: 'Finely minced onion sauteed provides great aromatic base.',
       impact: 'minor_difference',
     },
+    {
+      substituteItems: [{ name: 'Garlic Powder', slug: 'garlic_powder', amountRatio: 0.25 }],
+      note: '1/4 tsp garlic powder equals 1 fresh clove.',
+      impact: 'seamless',
+    },
   ],
   'soy sauce': [
     {
@@ -73,12 +102,24 @@ export function findSubstitutionsForMissing(
   availablePantrySlugs: Set<string>
 ): SubstitutionOption | null {
   const normalized = missingIngredientName.toLowerCase().trim();
-  const options = CULINARY_SUBSTITUTIONS[normalized];
+  
+  // Look up direct or partial matching key
+  let options = CULINARY_SUBSTITUTIONS[normalized];
+  if (!options) {
+    for (const [key, opts] of Object.entries(CULINARY_SUBSTITUTIONS)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        options = opts;
+        break;
+      }
+    }
+  }
+
   if (!options) return null;
 
   for (const option of options) {
     const hasAllSubs = option.substituteItems.every((sub) =>
-      availablePantrySlugs.has(sub.slug.toLowerCase())
+      availablePantrySlugs.has(sub.slug.toLowerCase()) ||
+      Array.from(availablePantrySlugs).some((s) => s.includes(sub.slug) || sub.slug.includes(s))
     );
     if (hasAllSubs) {
       return option;

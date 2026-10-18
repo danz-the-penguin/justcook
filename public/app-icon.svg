@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cc5a35"/>
+      <stop offset="100%" stop-color="#993819"/>
+    </linearGradient>
+    <linearGradient id="warmGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#faf8f5"/>
+      <stop offset="100%" stop-color="#efe7da"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Background squircle -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle inner border -->
+  <rect x="12" y="12" width="488" height="488" rx="108" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+
+  <!-- Chef Hat Illustration -->
+  <g filter="url(#shadow)" fill="url(#warmGrad)">
+    <!-- Base band -->
+    <rect x="156" y="330" width="200" height="48" rx="12"/>
+    
+    <!-- Puffs -->
+    <path d="M 156 330 
+             C 110 320 100 240 150 200 
+             C 140 140 220 120 256 160 
+             C 292 120 372 140 362 200 
+             C 412 240 402 320 356 330 
+             Z"/>
+  </g>
+
+  <!-- Accent Culinary Sizzle Pan / Leaf -->
+  <circle cx="256" cy="354" r="10" fill="#cc5a35"/>
+</svg>

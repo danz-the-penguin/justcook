@@ -326,6 +326,11 @@ class SoundEngine {
       osc.stop(now + 0.6);
     } catch {}
   }
+
+  // Cheerful success chime
+  public playSuccess() {
+    this.playDing();
+  }
 }
 
 export const sound = new SoundEngine();

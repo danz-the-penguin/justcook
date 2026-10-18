@@ -1,7 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Play, Pause, RotateCcw, Check, ChevronRight, ChevronLeft, Volume2, Timer, Utensils, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  Play,
+  Pause,
+  RotateCcw,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  Volume2,
+  Timer,
+  Utensils,
+  Sparkles,
+  Sun,
+  Mic,
+  MicOff,
+} from 'lucide-react';
 import { sound } from '@/lib/audio';
 
 interface CookingModeModalProps {
@@ -14,10 +29,59 @@ export function CookingModeModal({ recipe, onClose, onFinishCooking }: CookingMo
   const steps: string[] = recipe.instructions || [];
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
 
+  // Screen Wake Lock State
+  const [isWakeLocked, setIsWakeLocked] = useState(false);
+  const wakeLockRef = useRef<any>(null);
+
+  // Voice Assistant States
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [lastHeardCommand, setLastHeardCommand] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
   // Timer states
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [initialTimerSeconds, setInitialTimerSeconds] = useState<number>(0);
+
+  // 1. Screen Wake Lock API (keeps phone screen on with messy hands)
+  useEffect(() => {
+    let released = false;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && !released) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          setIsWakeLocked(true);
+
+          wakeLockRef.current.addEventListener('release', () => {
+            if (!released) setIsWakeLocked(false);
+          });
+        }
+      } catch (err) {
+        console.warn('Wake Lock request failed or not supported:', err);
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !released) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+      setIsWakeLocked(false);
+    };
+  }, []);
 
   // Extract timer duration from current step text (e.g. "8 minutes" or "30 seconds")
   useEffect(() => {
@@ -62,19 +126,125 @@ export function CookingModeModal({ recipe, onClose, onFinishCooking }: CookingMo
     };
   }, [timerRunning, timerSeconds]);
 
+  const readCurrentStep = (stepText?: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const text = stepText || steps[currentStepIdx] || '';
+      const utterance = new SpeechSynthesisUtterance(`Step ${currentStepIdx + 1}. ${text}`);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const handleNextStep = () => {
     sound.playWoodTap();
     if (currentStepIdx < steps.length - 1) {
-      setCurrentStepIdx((prev) => prev + 1);
+      setCurrentStepIdx((prev) => {
+        const next = prev + 1;
+        if (isVoiceActive) readCurrentStep(steps[next]);
+        return next;
+      });
     }
   };
 
   const handlePrevStep = () => {
     sound.playWoodTap();
     if (currentStepIdx > 0) {
-      setCurrentStepIdx((prev) => prev - 1);
+      setCurrentStepIdx((prev) => {
+        const next = prev - 1;
+        if (isVoiceActive) readCurrentStep(steps[next]);
+        return next;
+      });
     }
   };
+
+  // 2. Web Speech Recognition for Hands-Free voice commands ("next", "back", "repeat")
+  const toggleVoiceControl = () => {
+    if (isVoiceActive) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsVoiceActive(false);
+      setLastHeardCommand(null);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Voice control is supported in modern browsers like Chrome, Edge, and Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        const lastIndex = event.results.length - 1;
+        const transcript = event.results[lastIndex][0].transcript.toLowerCase().trim();
+        setLastHeardCommand(transcript);
+
+        if (
+          transcript.includes('next') ||
+          transcript.includes('forward') ||
+          transcript.includes('continue')
+        ) {
+          handleNextStep();
+        } else if (transcript.includes('back') || transcript.includes('previous')) {
+          handlePrevStep();
+        } else if (
+          transcript.includes('repeat') ||
+          transcript.includes('read') ||
+          transcript.includes('say')
+        ) {
+          readCurrentStep();
+        } else if (transcript.includes('start timer') || transcript.includes('resume')) {
+          setTimerRunning(true);
+        } else if (transcript.includes('pause timer') || transcript.includes('stop timer')) {
+          setTimerRunning(false);
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn('Speech recognition error:', e);
+      };
+
+      recognition.onend = () => {
+        if (isVoiceActive && recognitionRef.current) {
+          try {
+            recognition.start();
+          } catch {}
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsVoiceActive(true);
+      sound.playDing();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const handleFinish = () => {
     sound.playDing();
@@ -136,13 +306,60 @@ export function CookingModeModal({ recipe, onClose, onFinishCooking }: CookingMo
           </h2>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <span className="text-xs font-sans text-stone-400 hidden sm:inline">
-            Tap right side of screen (or press Space / →) to advance
-          </span>
+        <div className="flex items-center space-x-2">
+          {/* Screen Wake Lock Indicator */}
+          {isWakeLocked && (
+            <span
+              className="hidden md:inline-flex items-center space-x-1.5 text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl font-medium"
+              title="Screen Wake Lock is active: display will not turn off while cooking"
+            >
+              <Sun className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
+              <span>Screen Awake</span>
+            </span>
+          )}
+
+          {/* Read Current Step Aloud */}
+          <button
+            onClick={() => readCurrentStep()}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-xs text-white transition-all cursor-pointer"
+            title="Read current step aloud using speech synthesis"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-[#e69374]" />
+            <span className="hidden sm:inline">Read Step</span>
+          </button>
+
+          {/* Voice Assistant Toggle */}
+          <button
+            onClick={toggleVoiceControl}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer border ${
+              isVoiceActive
+                ? 'bg-[#cc5a35] text-white border-[#cc5a35] shadow-[0_0_15px_rgba(204,90,53,0.6)]'
+                : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+            }`}
+            title="Say 'Next', 'Back', 'Repeat', or 'Start timer'"
+          >
+            {isVoiceActive ? (
+              <>
+                <Mic className="w-3.5 h-3.5 text-white animate-bounce" />
+                <span>Listening...</span>
+              </>
+            ) : (
+              <>
+                <MicOff className="w-3.5 h-3.5 text-stone-400" />
+                <span className="hidden sm:inline">Voice Control</span>
+              </>
+            )}
+          </button>
+
+          {lastHeardCommand && isVoiceActive && (
+            <span className="hidden lg:inline text-xs text-[#e69374] font-mono bg-black/40 px-2.5 py-1 rounded-lg border border-white/10">
+              🎙️ &ldquo;{lastHeardCommand}&rdquo;
+            </span>
+          )}
+
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all"
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all cursor-pointer ml-1"
           >
             <X className="w-5 h-5" />
           </button>
