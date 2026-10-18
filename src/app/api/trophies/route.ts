@@ -110,3 +110,37 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: false, error: 'Failed to delete log entry' }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, itemName, quantity, unit, recipeTitle, savedDaysBeforeExpiry, estimatedValue, rescuedAt } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Log entry id is required' }, { status: 400 });
+    }
+
+    const updated = await prisma.rescuedStat.update({
+      where: { id },
+      data: {
+        ...(itemName !== undefined && { itemName: String(itemName).trim() }),
+        ...(quantity !== undefined && { quantity: Number(quantity) }),
+        ...(unit !== undefined && { unit: String(unit).trim() }),
+        ...(recipeTitle !== undefined && { recipeTitle: recipeTitle ? String(recipeTitle).trim() : null }),
+        ...(savedDaysBeforeExpiry !== undefined && {
+          savedDaysBeforeExpiry:
+            savedDaysBeforeExpiry !== null && savedDaysBeforeExpiry !== ''
+              ? Number(savedDaysBeforeExpiry)
+              : null,
+        }),
+        ...(estimatedValue !== undefined && { estimatedValue: Number(estimatedValue) }),
+        ...(rescuedAt !== undefined && { rescuedAt: new Date(rescuedAt) }),
+      },
+    });
+
+    return NextResponse.json({ success: true, item: updated });
+  } catch (error) {
+    console.error('Error in PATCH /api/trophies:', error);
+    return NextResponse.json({ success: false, error: 'Failed to update log entry' }, { status: 500 });
+  }
+}
