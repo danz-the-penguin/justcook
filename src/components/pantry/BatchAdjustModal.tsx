@@ -19,7 +19,7 @@ interface BatchAdjustModalProps {
 }
 
 export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: BatchAdjustModalProps) {
-  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize, updateBatchSlices } = usePantryStore();
+  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize, updateBatchSlices, addNewItemBatch } = usePantryStore();
 
   // All React hooks MUST be at the top level unconditionally
   const [expiryDate, setExpiryDate] = useState<string>(
@@ -368,6 +368,37 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
               />
               <span className="text-xs text-[#796f64]">slices per whole loaf</span>
             </div>
+
+            {batch.quantity > 1 && (
+              <div className="mt-3 pt-2.5 border-t border-[#e8e2d8] flex items-center justify-between">
+                <span className="text-[11px] text-[#796f64]">
+                  Batch contains {batch.quantity} loaves.
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSaving(true);
+                    await updateBatchQuantity(batch.id, 1);
+                    await addNewItemBatch({
+                      slug: item.slug,
+                      name: item.name,
+                      category: item.category,
+                      location: batch.location,
+                      quantity: Math.max(1, Math.round(batch.quantity - 1)),
+                      unit: batch.unit,
+                      size: batch.size || 'medium',
+                      slicesPerLoaf: slicesPerLoaf,
+                      expiresAt: batch.expiresAt,
+                    });
+                    setIsSaving(false);
+                    onClose();
+                  }}
+                  className="px-2.5 py-1 text-xs font-sans font-medium bg-white hover:bg-[#faeee8] text-[#cc5a35] rounded-lg border border-[#cc5a35]/40 transition-colors cursor-pointer"
+                >
+                  ✂️ Split into Individual Loaves
+                </button>
+              </div>
+            )}
           </div>
         )}
 

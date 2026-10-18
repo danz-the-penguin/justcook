@@ -87,7 +87,7 @@ interface PantryStore {
     obtainedAt?: string;
     expiresAt?: string;
     notes?: string;
-  }) => Promise<void>;
+  }) => Promise<PantryBatchData | null>;
   uploadCustomAsset: (formData: FormData) => Promise<{ success: boolean; error?: string; item?: any }>;
   editCustomAsset: (formData: FormData) => Promise<{ success: boolean; error?: string; item?: any }>;
 }
@@ -513,14 +513,17 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
   addNewItemBatch: async (payload) => {
     sound.playPop();
     try {
-      await fetch('/api/pantry', {
+      const res = await fetch('/api/pantry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      const data = await res.json();
       await get().fetchPantry();
+      return (data.batch as PantryBatchData) || null;
     } catch (e) {
       console.error('Failed to add new batch:', e);
+      return null;
     }
   },
 

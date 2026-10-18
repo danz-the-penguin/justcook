@@ -119,10 +119,10 @@ export async function POST(request: Request) {
       ? new Date(expiresAt)
       : calculateExpiryDate(item.slug, item.category, location as StorageLocation, finalObtainedAt);
 
-    const finalSize = size || extractBatchSize(notes);
+    const finalSize = size || extractBatchSize(notes) || 'medium';
     const slicesCount = body.slicesPerLoaf || body.newSlices;
     let finalNotes = notes || null;
-    if (finalSize && finalSize !== 'medium') {
+    if (finalSize) {
       finalNotes = finalNotes ? `${finalNotes} size:${finalSize}` : `size:${finalSize}`;
     }
     if (slicesCount && Number(slicesCount) > 0) {
@@ -141,7 +141,15 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, batch, item });
+    const enrichedBatch = {
+      ...batch,
+      size: finalSize,
+      slicesPerLoaf: slicesCount ? Number(slicesCount) : extractLoafSlices(batch.notes),
+      freshness: getFreshnessStatus(batch.expiresAt),
+      daysLeft: Math.ceil((batch.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
+    };
+
+    return NextResponse.json({ success: true, batch: enrichedBatch, item });
   } catch (error) {
     console.error('Error in POST /api/pantry:', error);
     return NextResponse.json({ success: false, error: 'Failed to add pantry batch' }, { status: 500 });

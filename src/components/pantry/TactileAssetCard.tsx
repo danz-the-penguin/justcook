@@ -13,6 +13,7 @@ import {
 } from '@/lib/constants/shelf-life';
 import { Plus, Minus, Calendar, Trash2, ArrowRightLeft, Pencil, MoreHorizontal, Utensils } from 'lucide-react';
 import { sound } from '@/lib/audio';
+import { AddNewGroupModal } from './AddNewGroupModal';
 
 interface TactileAssetCardProps {
   item: EnrichedPantryItem;
@@ -66,6 +67,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDraggingAny, setIsDraggingAny] = useState(false);
   const [focusedBatchId, setFocusedBatchId] = useState<string | null>(null);
+  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
   const lastDragEndTimeRef = useRef<number>(0);
 
   const primaryBatch = item.batches[0];
@@ -165,6 +167,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
   const sprites: SpriteItem[] = [];
   let overflowCount = 0;
+  const displayedBatches = focusedBatch ? [focusedBatch] : activeBatches;
 
   if (isSpice) {
     // For spices weighed in grams, only one item should be displayed,
@@ -172,10 +175,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     let jarCount = 0;
     if (totalQty > 0) {
       if (['jar', 'bottle', 'shaker', 'canister', 'tin', 'can'].includes(unit.toLowerCase())) {
-        jarCount = Math.max(1, Math.floor(totalQty));
+        jarCount = Math.max(1, Math.floor(focusedBatch ? focusedBatch.quantity : totalQty));
       } else {
-        // Each active batch represents 1 physical container/jar
-        jarCount = Math.max(1, activeBatches.length);
+        // Each displayed batch represents 1 physical container/jar
+        jarCount = Math.max(1, displayedBatches.length);
       }
     }
 
@@ -184,9 +187,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       let jarLabel = '';
       let jarQty = totalQty;
       if (jarCount === 1) {
-        jarLabel = `1 Jar • ${formatQuantityWithCulinaryFraction(totalQty).display} ${unit}`;
+        const q = focusedBatch ? focusedBatch.quantity : totalQty;
+        jarLabel = `1 Jar • ${formatQuantityWithCulinaryFraction(q).display} ${unit}`;
       } else {
-        const batchQty = activeBatches[i]?.quantity;
+        const batchQty = displayedBatches[i]?.quantity;
         jarQty = batchQty !== undefined ? batchQty : totalQty / jarCount;
         const qtyDisplay = formatQuantityWithCulinaryFraction(jarQty).display;
         jarLabel = `Jar ${i + 1} • ${qtyDisplay} ${unit}`;
@@ -200,10 +204,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
       sprites.push({
         id: `${item.id}-jar-${i}`,
-        batchId: activeBatches[i]?.id,
+        batchId: displayedBatches[i]?.id,
         batchIndex: i,
-        daysLeft: activeBatches[i]?.daysLeft,
-        freshness: activeBatches[i]?.freshness,
+        daysLeft: displayedBatches[i]?.daysLeft,
+        freshness: displayedBatches[i]?.freshness,
         fraction: 1,
         isPartial: false,
         sizeTier: 'medium',
@@ -224,8 +228,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     let spritesAdded = 0;
     let totalLogicalLoaves = 0;
 
-    for (let bIdx = 0; bIdx < activeBatches.length; bIdx++) {
-      const batch = activeBatches[bIdx];
+    for (let bIdx = 0; bIdx < displayedBatches.length; bIdx++) {
+      const batch = displayedBatches[bIdx];
       if (spritesAdded >= maxSprites) break;
 
       const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
@@ -278,11 +282,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     }
 
     overflowCount = Math.max(0, totalLogicalLoaves - maxSprites);
-  } else if (activeBatches.length > 0) {
+  } else if (displayedBatches.length > 0) {
       let spritesAdded = 0;
 
-      for (let bIdx = 0; bIdx < activeBatches.length; bIdx++) {
-        const batch = activeBatches[bIdx];
+      for (let bIdx = 0; bIdx < displayedBatches.length; bIdx++) {
+        const batch = displayedBatches[bIdx];
         if (spritesAdded >= maxSprites) break;
 
         const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
@@ -325,7 +329,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
         }
       }
 
-      const totalLogicalSprites = activeBatches.reduce((acc, b) => {
+      const totalLogicalSprites = displayedBatches.reduce((acc, b) => {
         const w = Math.floor(b.quantity);
         const r = snapToCulinaryFraction(b.quantity - w);
         return acc + w + (r >= 0.04 ? 1 : 0);
@@ -572,6 +576,15 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 {activeBatches.length} groups
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setIsAddGroupModalOpen(true)}
+              className="text-xs font-sans font-medium px-2.5 py-1 rounded-full bg-white hover:bg-[#faeee8] text-[#cc5a35] border border-dashed border-[#cc5a35]/60 flex items-center space-x-1 cursor-pointer transition-all shadow-2xs"
+              title="Add another group with chosen physical size, loaf slices, or expiry date"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Group</span>
+            </button>
             {targetBatch && (
               <button
                 onClick={() => onEditBatch(targetBatch, item)}
@@ -613,7 +626,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       : 'bg-white hover:bg-[#f2ede4] text-[#685f54] border border-[#e5dec9]'
                   }`}
                 >
-                  All ({formatQuantityWithCulinaryFraction(totalQty).display})
+                  All ({isBread ? `${totalBreadLoaves} loaves` : formatQuantityWithCulinaryFraction(totalQty).display})
                 </button>
 
                 {/* Individual Group Tabs */}
@@ -622,7 +635,12 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   const days = b.daysLeft ?? 7;
                   const isUrgent = days <= 1;
                   const isSoon = days <= 3 && !isUrgent;
-                  const sizeName = b.size ? b.size.charAt(0).toUpperCase() + b.size.slice(1) : `Group ${idx + 1}`;
+                  const cap = getLoafCapacity(b);
+                  const sizeName = isBread
+                    ? `Loaf ${idx + 1}`
+                    : b.size
+                    ? b.size.charAt(0).toUpperCase() + b.size.slice(1)
+                    : `Group ${idx + 1}`;
                   return (
                     <button
                       key={b.id}
@@ -636,11 +654,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           ? 'bg-[#cc5a35] text-white font-medium shadow-2xs'
                           : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border border-[#e5dec9]'
                       }`}
-                      title={`${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
+                      title={isBread ? `${sizeName}: ${cap} slices capacity • ${days}d left` : `${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
                     >
                       <span>{sizeName}</span>
                       <span className="font-mono text-[11px] opacity-85">
-                        {formatQuantityWithCulinaryFraction(b.quantity).display}
+                        {isBread ? `${cap} sl` : formatQuantityWithCulinaryFraction(b.quantity).display}
                       </span>
                       {isUrgent ? (
                         <span className="text-[10px] font-bold text-red-500">🚨 1d</span>
@@ -655,9 +673,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
               {/* Add New Group Button */}
               <button
                 type="button"
-                onClick={handleAddNewBatch}
+                onClick={() => setIsAddGroupModalOpen(true)}
                 className="w-7 h-7 rounded-xl bg-white hover:bg-[#faeee8] text-[#cc5a35] hover:text-[#9e3a19] border border-dashed border-[#cc5a35]/50 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs"
-                title="Add another group with separate expiry date"
+                title="Add another group with chosen size, slices, or expiry date"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -680,10 +698,14 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   <div className="flex items-center space-x-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
                     <span className="font-serif font-medium text-[#201b16] capitalize">
-                      {focusedBatch.size || 'medium'} Group:
+                      {isBread
+                        ? `Loaf ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'}):`
+                        : `${focusedBatch.size || 'medium'} Group:`}
                     </span>
                     <span className="font-mono font-bold text-[#cc5a35]">
-                      {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
+                      {isBread
+                        ? `${formatQuantityWithCulinaryFraction(getBreadSlices(focusedBatch.quantity, focusedBatch.unit, getLoafCapacity(focusedBatch))).display}/${getLoafCapacity(focusedBatch)} slices`
+                        : `${formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} ${unit}`}
                     </span>
                   </div>
 
@@ -692,27 +714,29 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       type="button"
                       onClick={() => onEditBatch(focusedBatch, item)}
                       className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
-                      title="Edit expiry date or size"
+                      title={isBread ? "Edit slices for this loaf, expiry date, or size" : "Edit expiry date or size"}
                     >
-                      <Calendar className="w-3 h-3 text-[#cc5a35]" />
+                      <Pencil className="w-3 h-3 text-[#cc5a35]" />
                       <span>
-                        {focusedBatch.daysLeft !== undefined
+                        {isBread
+                          ? `Edit Slices (${getLoafCapacity(focusedBatch)})`
+                          : focusedBatch.daysLeft !== undefined
                           ? focusedBatch.daysLeft <= 0
                             ? '🚨 Expired'
                             : focusedBatch.daysLeft === 1
                             ? '🚨 1d left'
                             : `Fresh (${focusedBatch.daysLeft}d)`
-                          : 'Set Date'}
+                          : 'Edit Group'}
                       </span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setFocusedBatchId(null)}
-                      className="text-xs text-[#8c8276] hover:text-[#201b16] px-1 hover:bg-white rounded transition-colors"
+                      className="text-xs text-[#8c8276] hover:text-[#201b16] px-1 hover:bg-white rounded transition-colors cursor-pointer"
                       title="View all groups"
                     >
-                      ✕
+                      ✕ Show All
                     </button>
                   </div>
                 </div>
@@ -1167,8 +1191,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
                   <button
                     onClick={(e) => {
+                      e.stopPropagation();
                       setMobileMenuOpen(false);
-                      handleAddNewBatch(e);
+                      setIsAddGroupModalOpen(true);
                     }}
                     className="w-full px-3 py-2 text-left text-xs font-medium text-[#201b16] hover:bg-[#faf8f5] rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
                   >
@@ -1211,6 +1236,18 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           </div>
         </div>
       </div>
+
+      {/* Interactive Add New Group Modal */}
+      <AddNewGroupModal
+        isOpen={isAddGroupModalOpen}
+        item={item}
+        onClose={() => setIsAddGroupModalOpen(false)}
+        onGroupAdded={(newBatchId) => {
+          if (newBatchId) {
+            setFocusedBatchId(newBatchId);
+          }
+        }}
+      />
     </div>
   );
 }
