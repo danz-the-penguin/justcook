@@ -235,19 +235,20 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
     try {
       if (batch) {
-        await fetch('/api/pantry', {
+        const res = await fetch('/api/pantry', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ batchId: batch.id, quantityChange: amount }),
         });
+        if (!res.ok) set({ items: prevItems });
       } else {
         await fetch('/api/pantry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, location, quantity: amount }),
         });
+        await get().fetchPantry();
       }
-      await get().fetchPantry();
     } catch (e) {
       console.error('Failed to increment item:', e);
       set({ items: prevItems });
@@ -278,12 +279,14 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     });
 
     try {
-      await fetch('/api/pantry', {
+      const res = await fetch('/api/pantry', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ batchId, quantityChange: amount }),
       });
-      await get().fetchPantry();
+      if (!res.ok) {
+        set({ items: prevItems });
+      }
     } catch (e) {
       console.error('Failed to increment batch:', e);
       set({ items: prevItems });
@@ -316,12 +319,14 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     });
 
     try {
-      await fetch('/api/pantry', {
+      const res = await fetch('/api/pantry', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ batchId, quantityChange: -amount }),
       });
-      await get().fetchPantry();
+      if (!res.ok) {
+        set({ items: prevItems });
+      }
     } catch (e) {
       console.error('Failed to decrement batch:', e);
       set({ items: prevItems });

@@ -44,16 +44,14 @@ const SPICE_STEPS_ML = [
   { label: '100ml', val: 100 },
 ];
 
-export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAssetCardProps) {
-  const {
-    incrementItem,
-    incrementBatch,
-    decrementBatch,
-    moveBatchLocation,
-    deleteAsset,
-    addNewItemBatch,
-    dropItemToPrepBoard,
-  } = usePantryStore();
+export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: TactileAssetCardProps) {
+  const incrementItem = usePantryStore((s) => s.incrementItem);
+  const incrementBatch = usePantryStore((s) => s.incrementBatch);
+  const decrementBatch = usePantryStore((s) => s.decrementBatch);
+  const moveBatchLocation = usePantryStore((s) => s.moveBatchLocation);
+  const deleteAsset = usePantryStore((s) => s.deleteAsset);
+  const addNewItemBatch = usePantryStore((s) => s.addNewItemBatch);
+  const dropItemToPrepBoard = usePantryStore((s) => s.dropItemToPrepBoard);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [stepIdx, setStepIdx] = useState<number>(0);
   const [isSlicing, setIsSlicing] = useState(false);
@@ -525,15 +523,14 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                 return (
                   <motion.div
                     key={s.id}
-                    layout
                     drag
                     dragSnapToOrigin
                     dragElastic={0.25}
                     whileDrag={{
-                      scale: s.scaleFactor * 1.25,
-                      rotate: idx % 2 === 0 ? 8 : -8,
+                      scale: s.scaleFactor * 1.15,
+                      rotate: idx % 2 === 0 ? 6 : -6,
                       zIndex: 9999,
-                      filter: 'drop-shadow(0 14px 22px rgba(0,0,0,0.35))',
+                      opacity: 0.92,
                     }}
                     whileTap={{ scale: s.scaleFactor * 0.95 }}
                     onDragStart={() => {
@@ -544,17 +541,15 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                       handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
                     }}
                     onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
-                    initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
-                    animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
+                    initial={{ scale: 0, opacity: 0, y: -8 }}
+                    animate={{ scale: s.scaleFactor, opacity: 1, y: 0, rotate: idx % 3 === 0 ? -2 : idx % 3 === 1 ? 2 : 0 }}
                     exit={{
                       scale: 0,
-                      y: -15,
                       opacity: 0,
-                      rotate: idx % 2 === 0 ? 15 : -15,
-                      transition: { duration: 0.18 },
+                      transition: { duration: 0.15 },
                     }}
-                    transition={{ type: 'spring', stiffness: 420, damping: 25 }}
-                    className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-all ${
+                    transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+                    className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transform-gpu transition-all ${
                       isFocused
                         ? 'ring-2.5 ring-[#cc5a35] ring-offset-3 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/40 shadow-sm p-2 z-20'
                         : focusedBatchId
@@ -930,3 +925,6 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     </div>
   );
 }
+
+export const TactileAssetCard = React.memo(TactileAssetCardComponent);
+

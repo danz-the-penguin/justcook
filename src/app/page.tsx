@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { StorageZoneTabs } from '@/components/pantry/StorageZoneTabs';
 import { TactileAssetCard } from '@/components/pantry/TactileAssetCard';
@@ -41,41 +41,48 @@ export default function PantryKitchenPage() {
     };
   }, [fetchPantry]);
 
-  const displayedItems = items
-    .map((item) => {
-      const matchingBatches =
-        activeLocation === 'all'
-          ? item.batches
-          : activeLocation === 'spice'
-          ? (isSpiceOrJarItem(item.category, item.defaultUnit, item.slug) ? item.batches : [])
-          : item.batches.filter((b) => b.location === activeLocation);
+  const displayedItems = useMemo(() => {
+    return items
+      .map((item) => {
+        if (activeLocation === 'all') return item;
+        const matchingBatches =
+          activeLocation === 'spice'
+            ? (isSpiceOrJarItem(item.category, item.defaultUnit, item.slug) ? item.batches : [])
+            : item.batches.filter((b) => b.location === activeLocation);
 
-      if (matchingBatches.length === 0) return null;
+        if (matchingBatches.length === 0) return null;
 
-      const totalQuantity = matchingBatches.reduce((sum, b) => sum + b.quantity, 0);
+        const totalQuantity = matchingBatches.reduce((sum, b) => sum + b.quantity, 0);
 
-      return {
-        ...item,
-        totalQuantity,
-        batches: matchingBatches,
-      };
-    })
-    .filter((item): item is EnrichedPantryItem => item !== null)
-    .filter((item) => {
-      if (rescueFilter) {
-        return item.freshnessStatus === 'critical' || item.freshnessStatus === 'use_soon';
-      }
-      return true;
-    });
+        return {
+          ...item,
+          totalQuantity,
+          batches: matchingBatches,
+        };
+      })
+      .filter((item): item is EnrichedPantryItem => item !== null)
+      .filter((item) => {
+        if (rescueFilter) {
+          return item.freshnessStatus === 'critical' || item.freshnessStatus === 'use_soon';
+        }
+        return true;
+      });
+  }, [items, activeLocation, rescueFilter]);
 
-  const criticalItems = items.filter(
-    (i) => i.freshnessStatus === 'critical' || i.freshnessStatus === 'use_soon'
-  );
+  const criticalItems = useMemo(() => {
+    return items.filter(
+      (i) => i.freshnessStatus === 'critical' || i.freshnessStatus === 'use_soon'
+    );
+  }, [items]);
 
-  const handleEditBatch = (batch: PantryBatchData, item: EnrichedPantryItem) => {
+  const handleEditBatch = useCallback((batch: PantryBatchData, item: EnrichedPantryItem) => {
     setSelectedBatch(batch);
     setSelectedItem(item);
-  };
+  }, []);
+
+  const handleEditItem = useCallback((it: EnrichedPantryItem) => {
+    setSelectedEditItem(it);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#201b16] selection:bg-[#faeee8] selection:text-[#9e3a19]">
@@ -153,7 +160,7 @@ export default function PantryKitchenPage() {
                     key={item.id}
                     item={item}
                     onEditBatch={handleEditBatch}
-                    onEditItem={(it) => setSelectedEditItem(it)}
+                    onEditItem={handleEditItem}
                   />
                 ))}
               </div>
@@ -171,7 +178,7 @@ export default function PantryKitchenPage() {
                   key={item.id}
                   item={item}
                   onEditBatch={handleEditBatch}
-                  onEditItem={(it) => setSelectedEditItem(it)}
+                  onEditItem={handleEditItem}
                 />
               ))}
             </div>
