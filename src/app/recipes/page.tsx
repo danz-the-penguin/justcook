@@ -7,10 +7,11 @@ import { ScaleToFitModal } from '@/components/recipes/ScaleToFitModal';
 import { CookingModeModal } from '@/components/cooking/CookingModeModal';
 import { CookDeductionModal } from '@/components/cooking/CookDeductionModal';
 import { CreateRecipeModal } from '@/components/recipes/CreateRecipeModal';
+import { CulinaryRatioModal } from '@/components/recipes/CulinaryRatioModal';
 import { RecipeMatchResult } from '@/lib/matcher';
 import { usePantryStore } from '@/stores/usePantryStore';
 import { sound } from '@/lib/audio';
-import { ChefHat, Sparkles, Flame, Check, Search, Globe, Plus, ArrowLeft } from 'lucide-react';
+import { ChefHat, Sparkles, Flame, Check, Search, Globe, Plus, ArrowLeft, Scale } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RecipesPage() {
@@ -30,6 +31,7 @@ export default function RecipesPage() {
   const [deductionRecipe, setDeductionRecipe] = useState<any | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
+  const [isRatioOpen, setIsRatioOpen] = useState(false);
   const [cookSuccessMessage, setCookSuccessMessage] = useState<string | null>(null);
 
   // Sync initial filter from URL query parameter (e.g. /recipes?filter=rescue)
@@ -244,10 +246,22 @@ export default function RecipesPage() {
 
             <button
               onClick={() => {
+                sound.playWoodTap();
+                setIsRatioOpen(true);
+              }}
+              className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-base font-sans font-medium bg-white text-[#5c5349] border border-[#e8e2d8] hover:bg-[#faeee8] hover:text-[#9e3a19] hover:border-[#f0d9cf] transition-all whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+              title="Culinary Ratio & Portion Studio (McDonald's steam eggs, rice-to-water, pancake batter, vinaigrette)"
+            >
+              <Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#cc5a35]" />
+              <span>Ratio Studio</span>
+            </button>
+
+            <button
+              onClick={() => {
                 setEditingRecipe(null);
                 setIsCreateOpen(true);
               }}
-              className="flex items-center space-x-1.5 sm:space-x-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#cc5a35] hover:bg-[#b54926] text-white font-sans font-medium text-xs sm:text-base rounded-xl shadow-xs active:scale-95 transition-all whitespace-nowrap shrink-0"
+              className="flex items-center space-x-1.5 sm:space-x-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#cc5a35] hover:bg-[#b54926] text-white font-sans font-medium text-xs sm:text-base rounded-xl shadow-xs active:scale-95 transition-all whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
               <span>New Recipe</span>
@@ -361,6 +375,14 @@ export default function RecipesPage() {
         matchResult={scaleTarget}
         onClose={() => setScaleTarget(null)}
         onCookScaled={handleCookRecipe}
+        onOpenRatioStudio={() => setIsRatioOpen(true)}
+      />
+
+      {/* Culinary Golden Ratio Studio Modal */}
+      <CulinaryRatioModal
+        isOpen={isRatioOpen}
+        onClose={() => setIsRatioOpen(false)}
+        onCookRecipe={handleCookRecipe}
       />
 
       {/* Hands-Free Cooking Mode Fullscreen Modal */}
