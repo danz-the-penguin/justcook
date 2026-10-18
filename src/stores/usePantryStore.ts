@@ -63,6 +63,7 @@ interface PantryStore {
   clearPrepItems: () => void;
   removePrepItem: (id: string) => void;
   incrementItem: (slug: string, location: StorageLocation, amount?: number) => Promise<void>;
+  incrementBatch: (batchId: string, amount?: number) => Promise<void>;
   decrementBatch: (batchId: string, amount?: number) => Promise<void>;
   updateBatchQuantity: (batchId: string, newQuantity: number) => Promise<void>;
   updateBatchSize: (batchId: string, size: 'small' | 'medium' | 'large') => Promise<void>;
@@ -249,6 +250,42 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       await get().fetchPantry();
     } catch (e) {
       console.error('Failed to increment item:', e);
+      set({ items: prevItems });
+    }
+  },
+
+  incrementBatch: async (batchId, amount = 1) => {
+    sound.playPop();
+    const prevItems = get().items;
+
+    // Optimistic UI update for instant sprite pop
+    set({
+      items: prevItems.map((i) => {
+        const hasBatch = i.batches.some((b) => b.id === batchId);
+        if (!hasBatch) return i;
+        const updatedBatches = i.batches.map((b) =>
+          b.id === batchId
+            ? { ...b, quantity: snapToCulinaryFraction(b.quantity + amount) }
+            : b
+        );
+        const total = updatedBatches.reduce((acc, b) => acc + b.quantity, 0);
+        return {
+          ...i,
+          totalQuantity: snapToCulinaryFraction(total),
+          batches: updatedBatches,
+        };
+      }),
+    });
+
+    try {
+      await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, quantityChange: amount }),
+      });
+      await get().fetchPantry();
+    } catch (e) {
+      console.error('Failed to increment batch:', e);
       set({ items: prevItems });
     }
   },

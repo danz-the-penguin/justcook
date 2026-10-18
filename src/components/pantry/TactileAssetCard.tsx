@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { EnrichedPantryItem, usePantryStore, PantryBatchData } from '@/stores/usePantryStore';
@@ -47,6 +47,7 @@ const SPICE_STEPS_ML = [
 export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAssetCardProps) {
   const {
     incrementItem,
+    incrementBatch,
     decrementBatch,
     moveBatchLocation,
     deleteAsset,
@@ -58,9 +59,12 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
   const [isSlicing, setIsSlicing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDraggingAny, setIsDraggingAny] = useState(false);
+  const [focusedBatchId, setFocusedBatchId] = useState<string | null>(null);
   const lastDragEndTimeRef = useRef<number>(0);
 
   const primaryBatch = item.batches[0];
+  const focusedBatch = item.batches.find((b) => b.id === focusedBatchId) || null;
+  const targetBatch = focusedBatch || primaryBatch;
   const unit = item.defaultUnit;
   const isSpice = isSpiceOrJarItem(item.category, unit, item.slug);
   const isGrams = ['g', 'gram', 'grams'].includes(unit.toLowerCase());
@@ -75,6 +79,12 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
   const currentStep = availableSteps[stepIdx % availableSteps.length];
   const totalQty = isSpice ? item.totalQuantity : snapToCulinaryFraction(item.totalQuantity);
   const assetSrc = resolveFoodAsset(item.slug, item.category);
+
+  useEffect(() => {
+    if (focusedBatchId && !item.batches.some((b) => b.id === focusedBatchId)) {
+      setFocusedBatchId(null);
+    }
+  }, [item.batches, focusedBatchId]);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -214,6 +224,7 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
       for (let i = 0; i < wholeToShow; i++) {
         sprites.push({
           id: `${item.id}-whole-${i}`,
+          batchId: primaryBatch?.id,
           fraction: 1,
           isPartial: false,
           sizeTier: 'medium',
@@ -225,6 +236,7 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
         const fracInfo = formatQuantityWithCulinaryFraction(remainder);
         sprites.push({
           id: `${item.id}-partial`,
+          batchId: primaryBatch?.id,
           fraction: fracInfo.fractionValue,
           isPartial: true,
           fractionLabel: fracInfo.fractionLabel,
@@ -281,13 +293,24 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     }
   };
 
-  const handleSpriteClick = (e: React.MouseEvent, spriteAmount?: number, targetBatchId?: string) => {
+  const handleSpriteClick = (e: React.MouseEvent, _spriteAmount?: number, targetBatchId?: string) => {
     e.stopPropagation();
     // If a drag just ended, ignore the trailing synthetic click event!
     if (Date.now() - lastDragEndTimeRef.current < 400) {
       return;
     }
-    const amountToUse = spriteAmount ?? (isSpice ? currentStep.val : 1);
+    const batchToFocus = targetBatchId || primaryBatch?.id;
+    if (!batchToFocus) return;
+
+    sound.triggerHaptic('light');
+    sound.playWoodTap();
+    setFocusedBatchId((prev) => (prev === batchToFocus ? null : batchToFocus));
+  };
+
+  const handleChopToPan = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const target = targetBatch || primaryBatch;
+    const amountToUse = isSpice ? currentStep.val : 1;
     if (!isSpice) {
       sound.playKnifeChop();
       setIsSlicing(true);
@@ -295,24 +318,28 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     } else {
       sound.playPop();
     }
-    dropItemToPrepBoard(item, amountToUse, targetBatchId);
+    dropItemToPrepBoard(item, amountToUse, target?.id);
   };
 
   const handleIncrement = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const loc = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : 'fridge');
-    incrementItem(item.slug, loc, currentStep.val);
+    if (targetBatch) {
+      incrementBatch(targetBatch.id, currentStep.val);
+    } else {
+      const loc: StorageLocation = isSpice ? 'pantry' : 'fridge';
+      incrementItem(item.slug, loc, currentStep.val);
+    }
   };
 
   const handleDecrement = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (primaryBatch) {
+    if (targetBatch) {
       if (!isSpice) {
         sound.playKnifeChop();
         setIsSlicing(true);
         setTimeout(() => setIsSlicing(false), 280);
       }
-      decrementBatch(primaryBatch.id, currentStep.val);
+      decrementBatch(targetBatch.id, currentStep.val);
     }
   };
 
@@ -417,6 +444,11 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
 
         {/* Tactile Visual Shelf Tray (overflow visible so sprites drag freely across screen) */}
         <div
+          onClick={() => {
+            if (focusedBatchId) {
+              setFocusedBatchId(null);
+            }
+          }}
           className="relative min-h-[124px] sm:min-h-[148px] bg-[#faf8f5] border border-[#e5dec9] rounded-xl p-3 sm:p-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
           {/* Knife Blade Slash Flash Effect on Slice */}
@@ -438,6 +470,7 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
           <AnimatePresence mode="popLayout">
             {sprites.map((s, idx) => {
               const spriteAmount = s.isPartial ? s.fraction : (isSpice ? currentStep.val : 1);
+              const isFocused = Boolean(s.batchId && s.batchId === focusedBatchId);
               return (
                 <motion.div
                   key={s.id}
@@ -460,19 +493,57 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                     handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
                   }}
                   onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
-                initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
-                animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
-                exit={{
-                  scale: 0,
-                  y: -15,
-                  opacity: 0,
-                  rotate: idx % 2 === 0 ? 15 : -15,
-                  transition: { duration: 0.18 },
-                }}
-                transition={{ type: 'spring', stiffness: 420, damping: 25 }}
-                className="relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center"
-                title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Drag to pan or tap to chop!`}
-              >
+                  initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
+                  animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
+                  exit={{
+                    scale: 0,
+                    y: -15,
+                    opacity: 0,
+                    rotate: idx % 2 === 0 ? 15 : -15,
+                    transition: { duration: 0.18 },
+                  }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 25 }}
+                  className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-all ${
+                    isFocused
+                      ? 'ring-2 ring-[#cc5a35] ring-offset-2 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/60 shadow-md p-1.5 z-20'
+                      : 'hover:scale-105'
+                  }`}
+                  title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Tap to focus & subtract/add, or drag to pan!`}
+                >
+                  {/* Floating Focus Badge */}
+                  {isFocused && (
+                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#cc5a35] text-white text-[9px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs whitespace-nowrap z-30 uppercase tracking-wider animate-in fade-in zoom-in-75 duration-150 pointer-events-none">
+                      Focus ({s.sizeTier.toUpperCase()})
+                    </span>
+                  )}
+
+                  {/* Mini On-Sprite Stepper when Focused */}
+                  {isFocused && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-white/95 border border-[#e8e2d8] rounded-full px-1.5 py-0.5 shadow-lg z-30 space-x-1 backdrop-blur-xs animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                      <button
+                        type="button"
+                        onClick={handleDecrement}
+                        className="w-5 h-5 rounded-full bg-[#f2ede4] hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-xs flex items-center justify-center transition-colors active:scale-90 cursor-pointer"
+                        title={`Subtract ${currentStep.label} from this ${s.sizeTier} batch`}
+                      >
+                        -
+                      </button>
+                      <span className="text-[10px] font-mono font-bold text-[#cc5a35] px-1 whitespace-nowrap">
+                        ±{currentStep.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleIncrement}
+                        className="w-5 h-5 rounded-full bg-[#cc5a35] text-white font-bold text-xs flex items-center justify-center transition-colors active:scale-90 hover:bg-[#b54926] cursor-pointer"
+                        title={`Add ${currentStep.label} to this ${s.sizeTier} batch`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                 {s.isJar ? (
                   /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
                   <div className="relative flex flex-col items-center justify-center p-1 hover:scale-105 transition-transform select-none">
@@ -676,12 +747,33 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
 
       {/* Bottom Controls Bar */}
       <div className="mt-2 pt-2 border-t border-dashed border-[#efeae1] flex items-center justify-between gap-2">
-        {/* Quantity display with fractions */}
-        <div className="flex items-baseline space-x-1.5 shrink-0">
-          <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16]">
-            {formatQuantityWithCulinaryFraction(totalQty).display}
-          </span>
-          <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
+        {/* Quantity display with fractions & focused batch indicator */}
+        <div className="flex flex-col shrink-0">
+          <div className="flex items-baseline space-x-1.5">
+            <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16]">
+              {formatQuantityWithCulinaryFraction(totalQty).display}
+            </span>
+            <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
+          </div>
+          {focusedBatch && (
+            <div className="flex items-center space-x-1 text-[11px] font-sans text-[#cc5a35] font-semibold">
+              <span className="capitalize">{focusedBatch.size || 'medium'} batch:</span>
+              <span className="font-mono">
+                {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFocusedBatchId(null);
+                }}
+                className="ml-1 text-[10px] text-[#8c8276] hover:text-[#201b16] font-bold"
+                title="Deselect batch"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Stepper Buttons & Actions */}
@@ -690,8 +782,12 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
           <button
             onClick={handleDecrement}
             disabled={totalQty <= 0}
-            className="w-10 h-10 rounded-xl bg-[#f2ede4] hover:bg-[#e5dec9] active:scale-90 disabled:opacity-30 text-[#201b16] flex items-center justify-center transition-all shrink-0 cursor-pointer"
-            title={`Use ${currentStep.label} (Decrease item)`}
+            className={`w-10 h-10 rounded-xl active:scale-90 disabled:opacity-30 flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+              focusedBatch
+                ? 'bg-[#faeee8] hover:bg-[#f5e3db] text-[#9e3a19] border border-[#f0d9cf] ring-1 ring-[#e69374]'
+                : 'bg-[#f2ede4] hover:bg-[#e5dec9] text-[#201b16]'
+            }`}
+            title={`Subtract ${currentStep.label}${focusedBatch ? ` from ${focusedBatch.size || 'medium'} batch` : ''}`}
           >
             <Minus className="w-4 h-4" />
           </button>
@@ -699,15 +795,17 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
           {/* Increment Stepper */}
           <button
             onClick={handleIncrement}
-            className="w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] active:scale-90 text-white flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer"
-            title={`Add ${currentStep.label} (Spawn visual item)`}
+            className={`w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] active:scale-90 text-white flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer ${
+              focusedBatch ? 'ring-2 ring-[#cc5a35] ring-offset-1' : ''
+            }`}
+            title={`Add ${currentStep.label}${focusedBatch ? ` to ${focusedBatch.size || 'medium'} batch` : ''}`}
           >
             <Plus className="w-4 h-4" />
           </button>
 
           {/* Direct "Chop to Pan" Button */}
           <button
-            onClick={handleSpriteClick}
+            onClick={handleChopToPan}
             disabled={totalQty <= 0}
             className="w-10 h-10 rounded-xl bg-[#faeee8] hover:bg-[#f5e3db] active:scale-90 text-[#9e3a19] flex items-center justify-center transition-all border border-[#f0d9cf] shrink-0 disabled:opacity-30 cursor-pointer"
             title="Chop 1 portion into Cooking Pan on impact"
@@ -748,7 +846,7 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                   onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 bottom-12 w-52 bg-white border border-[#e5dec9] rounded-2xl shadow-xl p-1.5 z-50 flex flex-col space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150"
                 >
-                  {primaryBatch && (
+                  {targetBatch && (
                     <button
                       onClick={(e) => {
                         setMobileMenuOpen(false);
@@ -757,20 +855,20 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                       className="w-full px-3 py-2 text-left text-xs font-medium text-[#201b16] hover:bg-[#faf8f5] rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
                     >
                       <ArrowRightLeft className="w-4 h-4 text-[#787067]" />
-                      <span>Move Location ({locationIcons[primaryBatch.location || 'fridge']})</span>
+                      <span>Move Location ({locationIcons[targetBatch.location || 'fridge']})</span>
                     </button>
                   )}
 
-                  {primaryBatch && (
+                  {targetBatch && (
                     <button
                       onClick={() => {
                         setMobileMenuOpen(false);
-                        onEditBatch(primaryBatch, item);
+                        onEditBatch(targetBatch, item);
                       }}
                       className="w-full px-3 py-2 text-left text-xs font-medium text-[#201b16] hover:bg-[#faf8f5] rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
                     >
                       <Calendar className="w-4 h-4 text-[#787067]" />
-                      <span>Expiry &amp; Dates</span>
+                      <span>Expiry &amp; Dates ({targetBatch.size ? `${targetBatch.size.toUpperCase()} batch` : 'Dates'})</span>
                     </button>
                   )}
 
