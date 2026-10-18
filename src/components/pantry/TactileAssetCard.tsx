@@ -68,6 +68,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const isGrams = ['g', 'gram', 'grams'].includes(unit.toLowerCase());
   const isMl = ['ml', 'milliliter'].includes(unit.toLowerCase());
 
+  const activeBatches = item.batches.filter((b) => b.quantity > (isSpice ? 0 : 0.005));
+  const hasMultipleBatches = activeBatches.length > 1;
+
   const availableSteps = isSpice && isGrams
     ? SPICE_STEPS_GRAMS
     : isSpice && isMl
@@ -100,6 +103,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   interface SpriteItem {
     id: string;
     batchId?: string;
+    batchIndex?: number;
+    daysLeft?: number;
+    freshness?: 'fresh' | 'use_soon' | 'critical' | 'expired';
     fraction: number;
     isPartial: boolean;
     fractionLabel?: string;
@@ -118,7 +124,6 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   if (isSpice) {
     // For spices weighed in grams, only one item should be displayed,
     // or in a small bottle or jar, unless there are two jars/bottles!
-    const activeBatches = item.batches.filter((b) => b.quantity > 0);
     let jarCount = 0;
     if (totalQty > 0) {
       if (['jar', 'bottle', 'shaker', 'canister', 'tin', 'can'].includes(unit.toLowerCase())) {
@@ -151,6 +156,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       sprites.push({
         id: `${item.id}-jar-${i}`,
         batchId: activeBatches[i]?.id,
+        batchIndex: i,
+        daysLeft: activeBatches[i]?.daysLeft,
+        freshness: activeBatches[i]?.freshness,
         fraction: 1,
         isPartial: false,
         sizeTier: 'medium',
@@ -165,12 +173,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     overflowCount = Math.max(0, jarCount - 6);
   } else {
     // Discrete items with per-batch size tiers & fractional slicing
-    const activeBatches = item.batches.filter((b) => b.quantity > 0.005);
-
     if (activeBatches.length > 0) {
       let spritesAdded = 0;
 
-      for (const batch of activeBatches) {
+      for (let bIdx = 0; bIdx < activeBatches.length; bIdx++) {
+        const batch = activeBatches[bIdx];
         if (spritesAdded >= maxSprites) break;
 
         const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
@@ -184,6 +191,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           sprites.push({
             id: `${batch.id}-whole-${i}`,
             batchId: batch.id,
+            batchIndex: bIdx,
+            daysLeft: batch.daysLeft,
+            freshness: batch.freshness,
             fraction: 1,
             isPartial: false,
             sizeTier,
@@ -197,6 +207,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           sprites.push({
             id: `${batch.id}-partial`,
             batchId: batch.id,
+            batchIndex: bIdx,
+            daysLeft: batch.daysLeft,
+            freshness: batch.freshness,
             fraction: fracInfo.fractionValue,
             isPartial: true,
             fractionLabel: fracInfo.fractionLabel,
@@ -339,18 +352,23 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     }
   };
 
-  const handleAddSecondJar = async (e: React.MouseEvent) => {
+  const handleAddNewBatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const loc = primaryBatch ? (primaryBatch.location === 'fridge' ? 'pantry' : 'counter') : 'pantry';
-    const qty = primaryBatch ? primaryBatch.quantity : (isGrams ? 50 : 1);
+    const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : 'fridge');
+    const defaultQty = isSpice ? (isGrams ? 50 : 1) : 2;
     await addNewItemBatch({
       slug: item.slug,
       name: item.name,
       category: item.category,
       location: loc,
-      quantity: qty,
+      quantity: defaultQty,
       unit: item.defaultUnit,
     });
+  };
+
+  const handleAddSecondJar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await handleAddNewBatch(e);
   };
 
   const handleQuickMove = (e: React.MouseEvent) => {
@@ -361,24 +379,28 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     moveBatchLocation(primaryBatch.id, nextLoc);
   };
 
+  const activeBatchForFreshness = targetBatch || primaryBatch;
+  const activeDaysLeft = activeBatchForFreshness?.daysLeft ?? 7;
+  const activeStatus = activeBatchForFreshness?.freshness || item.freshnessStatus || 'fresh';
+
   // Claude-style muted, refined freshness pills
   const freshnessConfig = {
     critical: {
       badgeBg: 'bg-[#faeee8] text-[#9e3a19] border border-[#f0d9cf]',
       border: 'border-[#f0d9cf]',
-      label: `🚨 ${primaryBatch?.daysLeft ?? 0}d left`,
+      label: `🚨 ${activeDaysLeft}d left`,
       glow: 'shadow-[0_2px_14px_-2px_rgba(204,90,53,0.12)]',
     },
     use_soon: {
       badgeBg: 'bg-[#fef6ee] text-[#a15c07] border border-[#fae4c8]',
       border: 'border-[#fae4c8]',
-      label: `⏳ ${primaryBatch?.daysLeft ?? 2}d left`,
+      label: `⏳ ${activeDaysLeft}d left`,
       glow: '',
     },
     fresh: {
       badgeBg: 'bg-[#edf5ee] text-[#2d5930] border border-[#d2e7d3]',
       border: 'border-[#e8e2d8]',
-      label: `Fresh (${primaryBatch?.daysLeft ?? 7}d)`,
+      label: `Fresh (${activeDaysLeft}d)`,
       glow: '',
     },
     expired: {
@@ -387,7 +409,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       label: 'Expired',
       glow: 'opacity-75',
     },
-  }[item.freshnessStatus || 'fresh'];
+  }[activeStatus];
 
   const locationIcons: Record<StorageLocation, string> = {
     fridge: 'Fridge',
@@ -426,16 +448,26 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
             </span>
           </div>
 
-          {/* Freshness Badge */}
-          {primaryBatch && (
-            <button
-              onClick={() => onEditBatch(primaryBatch, item)}
-              className={`text-xs font-sans font-medium px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-transform hover:scale-105 shrink-0 whitespace-nowrap ${freshnessConfig.badgeBg}`}
-              title="Click to view and adjust expiration dates"
-            >
-              {freshnessConfig.label}
-            </button>
-          )}
+          {/* Freshness Badge & Multi-Batch Pill */}
+          <div className="flex items-center space-x-1.5 shrink-0">
+            {hasMultipleBatches && (
+              <span
+                className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-full bg-[#f4efe6] text-[#6b6255] border border-[#ded7cb]"
+                title={`${activeBatches.length} separate batches with different expiry dates or sizes`}
+              >
+                {activeBatches.length} groups
+              </span>
+            )}
+            {targetBatch && (
+              <button
+                onClick={() => onEditBatch(targetBatch, item)}
+                className={`text-xs font-sans font-medium px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-transform hover:scale-105 shrink-0 whitespace-nowrap ${freshnessConfig.badgeBg}`}
+                title="Click to view and adjust expiration dates"
+              >
+                {freshnessConfig.label}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tactile Visual Shelf Tray (overflow visible so sprites drag freely across screen) */}
@@ -447,6 +479,70 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           }}
           className="relative min-h-[190px] sm:min-h-[230px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
+          {/* Multi-Batch Switcher / Group Overview Bar */}
+          {hasMultipleBatches && !isSpice && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full flex items-center justify-between gap-1.5 pb-2.5 mb-2.5 border-b border-[#efeae1] overflow-x-auto no-scrollbar z-20"
+            >
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-sans font-bold text-[#787067] uppercase tracking-wider shrink-0">
+                  Groups:
+                </span>
+                {activeBatches.map((b, idx) => {
+                  const isBSelected = focusedBatchId === b.id;
+                  const days = b.daysLeft ?? 7;
+                  const isUrgent = days <= 1;
+                  const isSoon = days <= 3 && !isUrgent;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        setFocusedBatchId((prev) => (prev === b.id ? null : b.id));
+                        sound.playWoodTap();
+                      }}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-sans transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer ${
+                        isBSelected
+                          ? 'bg-[#cc5a35] text-white font-semibold shadow-xs ring-1 ring-[#cc5a35]'
+                          : 'bg-white hover:bg-[#faeee8] text-[#201b16] border border-[#e5dec9]'
+                      }`}
+                      title={`Group ${idx + 1} (${b.size || 'medium'}): ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left. Click to focus`}
+                    >
+                      <span className="capitalize">{b.size ? `${b.size.charAt(0).toUpperCase()} ` : ''}Gr.{idx + 1}</span>
+                      <span className="font-mono text-[11px] opacity-90">
+                        ({formatQuantityWithCulinaryFraction(b.quantity).display})
+                      </span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-tight ${
+                          isBSelected
+                            ? 'bg-white/20 text-white'
+                            : isUrgent
+                            ? 'bg-[#faeee8] text-[#9e3a19]'
+                            : isSoon
+                            ? 'bg-[#fef6ee] text-[#a15c07]'
+                            : 'bg-[#edf5ee] text-[#2d5930]'
+                        }`}
+                      >
+                        {isUrgent ? '🚨 1d' : `${days}d`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddNewBatch}
+                className="text-xs font-sans font-medium text-[#cc5a35] hover:text-[#9e3a19] px-2 py-1 rounded-xl bg-white hover:bg-[#faeee8] border border-dashed border-[#cc5a35]/40 transition-colors shrink-0 flex items-center space-x-1 cursor-pointer"
+                title="Add another group of tomatoes with separate expiry date"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Add Group</span>
+              </button>
+            </div>
+          )}
+
           {/* Top Focus Banner: Clean, non-overlapping controller for the selected batch */}
           <AnimatePresence>
             {focusedBatch && (
@@ -460,16 +556,37 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 className="w-full overflow-hidden z-20"
               >
                 <div className="w-full px-3.5 py-2 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between shadow-2xs">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
                     <span className="font-serif text-sm sm:text-base font-medium text-[#201b16] capitalize">
-                      {focusedBatch.size || 'medium'} Batch
+                      {hasMultipleBatches
+                        ? `Group ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'})`
+                        : `${focusedBatch.size || 'medium'} Batch`}
                     </span>
                     <span className="text-xs font-mono font-bold text-[#cc5a35] bg-white px-2 py-0.5 rounded-md border border-[#f0d9cf]">
                       {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
                     </span>
+
+                    {/* Direct Expiry Date Pill & Editor Button */}
+                    <button
+                      type="button"
+                      onClick={() => onEditBatch(focusedBatch, item)}
+                      className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors"
+                      title="Click to view & change expiration date or size for this group"
+                    >
+                      <Calendar className="w-3 h-3 text-[#cc5a35]" />
+                      <span>
+                        {focusedBatch.daysLeft !== undefined
+                          ? focusedBatch.daysLeft <= 0
+                            ? '🚨 Expired'
+                            : focusedBatch.daysLeft === 1
+                            ? '🚨 1d left'
+                            : `⏳ ${focusedBatch.daysLeft}d left`
+                          : 'Set Date'}
+                      </span>
+                    </button>
                   </div>
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 shrink-0">
                     <button
                       type="button"
                       onClick={handleDecrement}
@@ -635,6 +752,21 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         className="object-contain pointer-events-none drop-shadow-sm max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
                         priority={idx < 4}
                       />
+                      {/* Group Expiry Badge when multiple batches exist */}
+                      {hasMultipleBatches && s.daysLeft !== undefined && (
+                        <span
+                          className={`absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full shadow-2xs border border-white/80 leading-tight ${
+                            s.daysLeft <= 1
+                              ? 'bg-[#faeee8] text-[#9e3a19] border-[#f0d9cf]'
+                              : s.daysLeft <= 3
+                              ? 'bg-[#fef6ee] text-[#a15c07] border-[#fae4c8]'
+                              : 'bg-[#edf5ee] text-[#2d5930] border-[#d2e7d3]'
+                          }`}
+                          title={`Group ${(s.batchIndex ?? 0) + 1}: ${s.daysLeft}d left`}
+                        >
+                          {s.daysLeft <= 1 ? '🚨 1d' : `${s.daysLeft}d`}
+                        </span>
+                      )}
                       {s.sizeTier !== 'medium' && (
                         <span
                           className={`absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs border border-white/70 leading-none ${
@@ -682,6 +814,22 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           left: `${Math.round(s.fraction * 1000) / 10}%`,
                         }}
                       />
+
+                      {/* Group Expiry Badge on Slice */}
+                      {hasMultipleBatches && s.daysLeft !== undefined && (
+                        <span
+                          className={`absolute -top-1 -left-1 z-10 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full shadow-2xs border border-white/80 leading-tight ${
+                            s.daysLeft <= 1
+                              ? 'bg-[#faeee8] text-[#9e3a19] border-[#f0d9cf]'
+                              : s.daysLeft <= 3
+                              ? 'bg-[#fef6ee] text-[#a15c07] border-[#fae4c8]'
+                              : 'bg-[#edf5ee] text-[#2d5930] border-[#d2e7d3]'
+                          }`}
+                          title={`Group ${(s.batchIndex ?? 0) + 1}: ${s.daysLeft}d left`}
+                        >
+                          {s.daysLeft <= 1 ? '🚨 1d' : `${s.daysLeft}d`}
+                        </span>
+                      )}
 
                       {/* Fraction & Size Pill Tag */}
                       <span
@@ -902,6 +1050,17 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       <span>Expiry &amp; Dates ({targetBatch.size ? `${targetBatch.size.toUpperCase()} batch` : 'Dates'})</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={(e) => {
+                      setMobileMenuOpen(false);
+                      handleAddNewBatch(e);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-medium text-[#201b16] hover:bg-[#faf8f5] rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-[#cc5a35]" />
+                    <span>+ Add New Group / Expiry Date</span>
+                  </button>
 
                   {onEditItem && (
                     <button
