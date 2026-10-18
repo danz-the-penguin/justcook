@@ -28,6 +28,14 @@ const FRACTION_STEPS = [
   { label: '⅛', val: 0.125 },
 ];
 
+const BREAD_STEPS = [
+  { label: '1 slice', val: 1 },
+  { label: '½ slice', val: 0.5 },
+  { label: '2 slices', val: 2 },
+  { label: '¼ slice', val: 0.25 },
+  { label: '4 slices', val: 4 },
+];
+
 const SPICE_STEPS_GRAMS = [
   { label: '10g', val: 10 },
   { label: '25g', val: 25 },
@@ -68,10 +76,26 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const isGrams = ['g', 'gram', 'grams'].includes(unit.toLowerCase());
   const isMl = ['ml', 'milliliter'].includes(unit.toLowerCase());
 
+  const isBread =
+    item.slug === 'bread' ||
+    item.name.toLowerCase().includes('bread') ||
+    ['slice', 'slices', 'loaf', 'loaves'].includes(unit.toLowerCase());
+
+  const getBreadSlices = (qty: number, unitStr: string) => {
+    const norm = (unitStr || '').toLowerCase().trim();
+    if (norm === 'loaf' || norm === 'loaves') return qty * 16;
+    return qty;
+  };
+
   const activeBatches = item.batches.filter((b) => b.quantity > (isSpice ? 0 : 0.005));
   const hasMultipleBatches = activeBatches.length > 1;
 
-  const availableSteps = isSpice && isGrams
+  const totalBreadSlices = activeBatches.reduce((acc, b) => acc + getBreadSlices(b.quantity, b.unit), 0);
+  const totalBreadLoaves = Math.max(totalBreadSlices > 0 ? 1 : 0, Math.ceil(totalBreadSlices / 16));
+
+  const availableSteps = isBread
+    ? BREAD_STEPS
+    : isSpice && isGrams
     ? SPICE_STEPS_GRAMS
     : isSpice && isMl
     ? SPICE_STEPS_ML
@@ -109,6 +133,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     fraction: number;
     isPartial: boolean;
     fractionLabel?: string;
+    breadSliceLabel?: string;
     sizeTier: 'small' | 'medium' | 'large';
     scaleFactor: number;
     isJar?: boolean;
@@ -171,9 +196,66 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       });
     }
     overflowCount = Math.max(0, jarCount - 6);
-  } else {
-    // Discrete items with per-batch size tiers & fractional slicing
-    if (activeBatches.length > 0) {
+  } else if (isBread) {
+    // BREAD LOAF & SLICE ARCHITECTURE:
+    // 1 Loaf = 16 slices. One loaf is one asset, two loaves are two assets.
+    // Stepping minuses or adds in slices (1 slice, 1/2 slice, etc.)
+    let spritesAdded = 0;
+    let totalLogicalLoaves = 0;
+
+    for (let bIdx = 0; bIdx < activeBatches.length; bIdx++) {
+      const batch = activeBatches[bIdx];
+      if (spritesAdded >= maxSprites) break;
+
+      const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
+      const scaleFactor = sizeTier === 'small' ? 0.82 : sizeTier === 'large' ? 1.22 : 1.0;
+      const bSlices = getBreadSlices(batch.quantity, batch.unit);
+
+      const fullLoaves = Math.floor(bSlices / 16);
+      const remSlices = snapToCulinaryFraction(bSlices - fullLoaves * 16);
+      const loavesInBatch = fullLoaves + (remSlices >= 0.04 ? 1 : 0);
+      totalLogicalLoaves += loavesInBatch;
+
+      // Full whole loaves in this batch
+      const fullToShow = Math.min(fullLoaves, maxSprites - spritesAdded);
+      for (let i = 0; i < fullToShow; i++) {
+        sprites.push({
+          id: `${batch.id}-loaf-full-${i}`,
+          batchId: batch.id,
+          batchIndex: bIdx,
+          daysLeft: batch.daysLeft,
+          freshness: batch.freshness,
+          fraction: 1,
+          isPartial: false,
+          breadSliceLabel: '16 slices',
+          sizeTier,
+          scaleFactor,
+        });
+        spritesAdded++;
+      }
+
+      // Partial loaf with remaining slices in this batch
+      if (remSlices >= 0.04 && spritesAdded < maxSprites) {
+        const fracInfo = formatQuantityWithCulinaryFraction(remSlices);
+        sprites.push({
+          id: `${batch.id}-loaf-partial`,
+          batchId: batch.id,
+          batchIndex: bIdx,
+          daysLeft: batch.daysLeft,
+          freshness: batch.freshness,
+          fraction: Math.min(1, Math.max(0.125, remSlices / 16)),
+          isPartial: true,
+          fractionLabel: `${fracInfo.display} slice${remSlices !== 1 ? 's' : ''}`,
+          breadSliceLabel: `${fracInfo.display} slice${remSlices !== 1 ? 's' : ''}`,
+          sizeTier,
+          scaleFactor,
+        });
+        spritesAdded++;
+      }
+    }
+
+    overflowCount = Math.max(0, totalLogicalLoaves - maxSprites);
+  } else if (activeBatches.length > 0) {
       let spritesAdded = 0;
 
       for (let bIdx = 0; bIdx < activeBatches.length; bIdx++) {
@@ -259,7 +341,6 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       const totalLogicalSprites = wholeCount + (remainder >= 0.04 ? 1 : 0);
       overflowCount = Math.max(0, totalLogicalSprites - maxSprites);
     }
-  }
 
   const handleSpriteDragEnd = (
     _e: MouseEvent | TouchEvent | PointerEvent,
@@ -321,7 +402,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const handleChopToPan = (e: React.MouseEvent) => {
     e.stopPropagation();
     const target = targetBatch || primaryBatch;
-    const amountToUse = isSpice ? currentStep.val : 1;
+    const amountToUse = isSpice ? currentStep.val : isBread ? currentStep.val : 1;
     if (!isSpice) {
       sound.playKnifeChop();
       setIsSlicing(true);
@@ -335,10 +416,14 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const handleIncrement = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (targetBatch) {
-      incrementBatch(targetBatch.id, currentStep.val);
+      const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
+      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      incrementBatch(targetBatch.id, stepVal);
     } else {
       const loc: StorageLocation = isSpice ? 'pantry' : 'fridge';
-      incrementItem(item.slug, loc, currentStep.val);
+      const isLoafUnit = ['loaf', 'loaves'].includes(unit.toLowerCase());
+      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      incrementItem(item.slug, loc, stepVal);
     }
   };
 
@@ -348,7 +433,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       if (!isSpice) {
         sound.playKnifeChop();
       }
-      decrementBatch(targetBatch.id, currentStep.val);
+      const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
+      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      decrementBatch(targetBatch.id, stepVal);
     }
   };
 
@@ -625,7 +712,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           <div className="w-full flex-1 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 py-1.5">
             <AnimatePresence mode="popLayout">
               {sprites.map((s, idx) => {
-                const spriteAmount = s.isPartial ? s.fraction : (isSpice ? currentStep.val : 1);
+                const spriteAmount = isBread ? currentStep.val : s.isPartial ? s.fraction : isSpice ? currentStep.val : 1;
                 const isFocused = Boolean(s.batchId && s.batchId === focusedBatchId);
                 const isCompact = sprites.length > 4;
                 const spriteSizeClass = isCompact
@@ -753,8 +840,14 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           {s.daysLeft <= 0 ? '🚨 Exp' : `🚨 ${s.daysLeft}d`}
                         </span>
                       )}
-                      {/* Subtly indicate non-medium size tier when multiple batches exist */}
-                      {hasMultipleBatches && s.sizeTier !== 'medium' && (
+                      {/* Subtly indicate bread slice count or non-medium size tier */}
+                      {isBread && s.breadSliceLabel ? (
+                        <span
+                          className="absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs bg-[#201b16] text-[#faf8f5] border border-white/60 leading-none"
+                        >
+                          {s.breadSliceLabel}
+                        </span>
+                      ) : hasMultipleBatches && s.sizeTier !== 'medium' && (
                         <span
                           className="absolute -bottom-1 -right-1 z-10 text-[9px] font-sans font-bold px-1.5 py-0.5 rounded-md shadow-2xs bg-white/95 text-[#685f54] border border-[#ded7cb] leading-none"
                         >
@@ -814,7 +907,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       <span
                         className="absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs bg-[#201b16] text-[#faf8f5] border border-white/60 leading-none"
                       >
-                        {s.fractionLabel}{hasMultipleBatches && s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
+                        {s.breadSliceLabel || s.fractionLabel}{hasMultipleBatches && s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
                       </span>
                     </div>
                   )}
@@ -901,14 +994,30 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       <div className="mt-2 pt-2 border-t border-dashed border-[#efeae1] flex items-center justify-between gap-2">
         {/* Quantity display with fractions & focused batch indicator */}
         <div className="flex flex-col shrink-0 min-w-0">
-          <div className="flex items-baseline space-x-1.5">
-            <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
-              {formatQuantityWithCulinaryFraction(focusedBatch ? focusedBatch.quantity : totalQty).display}
-            </span>
-            <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
-          </div>
+          {isBread ? (
+            <div className="flex flex-col">
+              <div className="flex items-baseline space-x-1.5">
+                <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
+                  {totalBreadLoaves}
+                </span>
+                <span className="text-sm sm:text-base font-sans text-[#787067]">
+                  {totalBreadLoaves === 1 ? 'Loaf' : 'Loaves'}
+                </span>
+              </div>
+              <span className="text-[11px] font-mono font-medium text-[#cc5a35]">
+                {formatQuantityWithCulinaryFraction(focusedBatch ? getBreadSlices(focusedBatch.quantity, focusedBatch.unit) : totalBreadSlices).display} slices in stock
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-baseline space-x-1.5">
+              <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
+                {formatQuantityWithCulinaryFraction(focusedBatch ? focusedBatch.quantity : totalQty).display}
+              </span>
+              <span className="text-sm sm:text-base font-sans text-[#787067]">{unit}</span>
+            </div>
+          )}
           {focusedBatch ? (
-            <div className="flex items-center space-x-1 text-[11px] font-sans text-[#cc5a35] font-semibold">
+            <div className="flex items-center space-x-1 text-[11px] font-sans text-[#cc5a35] font-semibold mt-0.5">
               <span className="capitalize">{focusedBatch.size || 'medium'} group</span>
               <button
                 type="button"
@@ -923,7 +1032,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
               </button>
             </div>
           ) : (
-            hasMultipleBatches && (
+            !isBread && hasMultipleBatches && (
               <span className="text-[11px] font-sans text-[#8c8276]">
                 {activeBatches.length} groups on shelf
               </span>

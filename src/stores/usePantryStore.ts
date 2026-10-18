@@ -118,7 +118,10 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     lastDropTimestamp = now;
 
     sound.playPanImpact();
-    const deductAmt = Math.min(amount, targetBatch ? targetBatch.quantity : item.totalQuantity > 0 ? amount : 0);
+    const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch?.unit || '').toLowerCase());
+    const deductAmt = isLoafUnit
+      ? Math.min(amount / 16, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount / 16 : 0))
+      : Math.min(amount, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount : 0));
 
     // Optimistically deduct from inventory if in stock
     if (targetBatch && deductAmt > 0) {
@@ -135,7 +138,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     if (existing) {
       nextPrep = currentPrep.map((p) =>
         p.id === existing.id
-          ? { ...p, amount: snapToCulinaryFraction(p.amount + (deductAmt || amount)), droppedAt: Date.now() }
+          ? { ...p, amount: snapToCulinaryFraction(p.amount + amount), droppedAt: Date.now() }
           : p
       );
     } else {
@@ -146,8 +149,8 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
           slug: item.slug,
           name: item.name,
           category: item.category,
-          amount: deductAmt || amount,
-          unit: item.defaultUnit,
+          amount: amount,
+          unit: item.slug === 'bread' ? 'slice' : item.defaultUnit,
           size: itemSize,
           batchId: targetBatch?.id,
           droppedAt: Date.now(),
@@ -161,10 +164,14 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
   clearPrepItems: () => {
     sound.playWoodTap();
     const currentPrep = get().prepItems;
+    const allBatches = get().items.flatMap((i) => i.batches);
     // Refund prepped items back to their pantry batches
     for (const p of currentPrep) {
       if (p.batchId && p.amount > 0) {
-        get().incrementBatch(p.batchId, p.amount);
+        const b = allBatches.find((batch) => batch.id === p.batchId);
+        const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
+        const refundAmt = isLoaf ? p.amount / 16 : p.amount;
+        get().incrementBatch(p.batchId, refundAmt);
       }
     }
     set({ prepItems: [] });
@@ -176,7 +183,11 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     const itemToRemove = currentPrep.find((p) => p.id === id);
     // Refund removed item back to its specific batch
     if (itemToRemove?.batchId && itemToRemove.amount > 0) {
-      get().incrementBatch(itemToRemove.batchId, itemToRemove.amount);
+      const allBatches = get().items.flatMap((i) => i.batches);
+      const b = allBatches.find((batch) => batch.id === itemToRemove.batchId);
+      const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
+      const refundAmt = isLoaf ? itemToRemove.amount / 16 : itemToRemove.amount;
+      get().incrementBatch(itemToRemove.batchId, refundAmt);
     }
     set({ prepItems: currentPrep.filter((p) => p.id !== id) });
   },
