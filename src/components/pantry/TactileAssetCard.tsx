@@ -81,20 +81,40 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     item.name.toLowerCase().includes('bread') ||
     ['slice', 'slices', 'loaf', 'loaves'].includes(unit.toLowerCase());
 
-  const getBreadSlices = (qty: number, unitStr: string) => {
+  const getLoafCapacity = (batch?: PantryBatchData | null): number => {
+    return batch?.slicesPerLoaf || 8;
+  };
+
+  const getBreadSlices = (qty: number, unitStr: string, capacity: number = 8) => {
     const norm = (unitStr || '').toLowerCase().trim();
-    if (norm === 'loaf' || norm === 'loaves') return qty * 16;
-    return qty;
+    if (norm === 'loaf' || norm === 'loaves') return snapToCulinaryFraction(qty * capacity);
+    return snapToCulinaryFraction(qty);
   };
 
   const activeBatches = item.batches.filter((b) => b.quantity > (isSpice ? 0 : 0.005));
   const hasMultipleBatches = activeBatches.length > 1;
 
-  const totalBreadSlices = activeBatches.reduce((acc, b) => acc + getBreadSlices(b.quantity, b.unit), 0);
-  const totalBreadLoaves = Math.max(totalBreadSlices > 0 ? 1 : 0, Math.ceil(totalBreadSlices / 16));
+  const totalBreadSlices = activeBatches.reduce(
+    (acc, b) => acc + getBreadSlices(b.quantity, b.unit, getLoafCapacity(b)),
+    0
+  );
+  const totalBreadLoaves = activeBatches.reduce((acc, b) => {
+    const cap = getLoafCapacity(b);
+    const s = getBreadSlices(b.quantity, b.unit, cap);
+    return acc + Math.ceil(s / cap);
+  }, 0) || (totalBreadSlices > 0 ? 1 : 0);
+
+  const activeLoafCap = getLoafCapacity(targetBatch || primaryBatch);
+  const dynamicBreadSteps = [
+    { label: '1 slice', val: 1 },
+    { label: '½ slice', val: 0.5 },
+    { label: '2 slices', val: 2 },
+    { label: '¼ slice', val: 0.25 },
+    { label: `${Math.max(1, Math.round(activeLoafCap / 2))} slices (½ loaf)`, val: activeLoafCap / 2 },
+  ];
 
   const availableSteps = isBread
-    ? BREAD_STEPS
+    ? dynamicBreadSteps
     : isSpice && isGrams
     ? SPICE_STEPS_GRAMS
     : isSpice && isMl
@@ -198,8 +218,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     overflowCount = Math.max(0, jarCount - 6);
   } else if (isBread) {
     // BREAD LOAF & SLICE ARCHITECTURE:
-    // 1 Loaf = 16 slices. One loaf is one asset, two loaves are two assets.
+    // 1 Loaf = N slices (configured by edit, default 8). One loaf is one asset, two loaves are two assets.
     // Stepping minuses or adds in slices (1 slice, 1/2 slice, etc.)
+    // Visual loaf reduces 1/N on slice without making the asset disappear until 0 slices remain!
     let spritesAdded = 0;
     let totalLogicalLoaves = 0;
 
@@ -209,10 +230,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
       const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
       const scaleFactor = sizeTier === 'small' ? 0.82 : sizeTier === 'large' ? 1.22 : 1.0;
-      const bSlices = getBreadSlices(batch.quantity, batch.unit);
+      const capacity = getLoafCapacity(batch);
+      const bSlices = getBreadSlices(batch.quantity, batch.unit, capacity);
 
-      const fullLoaves = Math.floor(bSlices / 16);
-      const remSlices = snapToCulinaryFraction(bSlices - fullLoaves * 16);
+      const fullLoaves = Math.floor((bSlices + 0.0001) / capacity);
+      const remSlices = snapToCulinaryFraction(bSlices - fullLoaves * capacity);
       const loavesInBatch = fullLoaves + (remSlices >= 0.04 ? 1 : 0);
       totalLogicalLoaves += loavesInBatch;
 
@@ -227,26 +249,27 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           freshness: batch.freshness,
           fraction: 1,
           isPartial: false,
-          breadSliceLabel: '16 slices',
+          breadSliceLabel: `${capacity} slices`,
           sizeTier,
           scaleFactor,
         });
         spritesAdded++;
       }
 
-      // Partial loaf with remaining slices in this batch
+      // Partial loaf with remaining slices in this batch (does not disappear!)
       if (remSlices >= 0.04 && spritesAdded < maxSprites) {
         const fracInfo = formatQuantityWithCulinaryFraction(remSlices);
+        const loafFraction = Math.min(1, Math.max(0.0625, remSlices / capacity));
         sprites.push({
           id: `${batch.id}-loaf-partial`,
           batchId: batch.id,
           batchIndex: bIdx,
           daysLeft: batch.daysLeft,
           freshness: batch.freshness,
-          fraction: Math.min(1, Math.max(0.125, remSlices / 16)),
+          fraction: loafFraction,
           isPartial: true,
-          fractionLabel: `${fracInfo.display} slice${remSlices !== 1 ? 's' : ''}`,
-          breadSliceLabel: `${fracInfo.display} slice${remSlices !== 1 ? 's' : ''}`,
+          fractionLabel: `${fracInfo.display}/${capacity} slices`,
+          breadSliceLabel: `${fracInfo.display}/${capacity} slices`,
           sizeTier,
           scaleFactor,
         });
@@ -417,12 +440,14 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     e.stopPropagation();
     if (targetBatch) {
       const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
-      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      const cap = getLoafCapacity(targetBatch);
+      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
       incrementBatch(targetBatch.id, stepVal);
     } else {
       const loc: StorageLocation = isSpice ? 'pantry' : 'fridge';
       const isLoafUnit = ['loaf', 'loaves'].includes(unit.toLowerCase());
-      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      const cap = getLoafCapacity(primaryBatch);
+      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
       incrementItem(item.slug, loc, stepVal);
     }
   };
@@ -434,7 +459,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
         sound.playKnifeChop();
       }
       const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
-      const stepVal = isBread && isLoafUnit ? currentStep.val / 16 : currentStep.val;
+      const cap = getLoafCapacity(targetBatch);
+      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
       decrementBatch(targetBatch.id, stepVal);
     }
   };
@@ -442,7 +468,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const handleAddNewBatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : 'fridge');
-    const defaultQty = isSpice ? (isGrams ? 50 : 1) : 2;
+    const defaultQty = isSpice ? (isGrams ? 50 : 1) : 1;
     await addNewItemBatch({
       slug: item.slug,
       name: item.name,
@@ -450,6 +476,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       location: loc,
       quantity: defaultQty,
       unit: item.defaultUnit,
+      slicesPerLoaf: isBread ? getLoafCapacity(primaryBatch) : undefined,
     });
   };
 
@@ -1005,7 +1032,9 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 </span>
               </div>
               <span className="text-[11px] font-mono font-medium text-[#cc5a35]">
-                {formatQuantityWithCulinaryFraction(focusedBatch ? getBreadSlices(focusedBatch.quantity, focusedBatch.unit) : totalBreadSlices).display} slices in stock
+                {focusedBatch
+                  ? `${formatQuantityWithCulinaryFraction(getBreadSlices(focusedBatch.quantity, focusedBatch.unit, getLoafCapacity(focusedBatch))).display}/${getLoafCapacity(focusedBatch)} slices in group`
+                  : `${formatQuantityWithCulinaryFraction(totalBreadSlices).display} slices in stock`}
               </span>
             </div>
           ) : (

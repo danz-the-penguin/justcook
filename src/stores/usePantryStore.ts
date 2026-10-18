@@ -12,6 +12,7 @@ export interface PantryBatchData {
   location: StorageLocation;
   notes?: string | null;
   size?: 'small' | 'medium' | 'large';
+  slicesPerLoaf?: number;
   freshness: 'fresh' | 'use_soon' | 'critical' | 'expired';
   daysLeft: number;
 }
@@ -73,6 +74,7 @@ interface PantryStore {
   deleteAsset: (slug: string) => Promise<{ success: boolean; error?: string }>;
   moveBatchLocation: (batchId: string, newLocation: StorageLocation) => Promise<void>;
   updateBatchDates: (batchId: string, expiresAt: string) => Promise<void>;
+  updateBatchSlices: (batchId: string, slicesPerLoaf: number) => Promise<void>;
   addNewItemBatch: (payload: {
     slug: string;
     name?: string;
@@ -81,6 +83,7 @@ interface PantryStore {
     quantity: number;
     unit?: string;
     size?: 'small' | 'medium' | 'large';
+    slicesPerLoaf?: number;
     obtainedAt?: string;
     expiresAt?: string;
     notes?: string;
@@ -119,8 +122,9 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
     sound.playPanImpact();
     const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch?.unit || '').toLowerCase());
+    const loafCap = targetBatch?.slicesPerLoaf || 8;
     const deductAmt = isLoafUnit
-      ? Math.min(amount / 16, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount / 16 : 0))
+      ? Math.min(amount / loafCap, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount / loafCap : 0))
       : Math.min(amount, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount : 0));
 
     // Optimistically deduct from inventory if in stock
@@ -170,7 +174,8 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       if (p.batchId && p.amount > 0) {
         const b = allBatches.find((batch) => batch.id === p.batchId);
         const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
-        const refundAmt = isLoaf ? p.amount / 16 : p.amount;
+        const loafCap = b?.slicesPerLoaf || 8;
+        const refundAmt = isLoaf ? p.amount / loafCap : p.amount;
         get().incrementBatch(p.batchId, refundAmt);
       }
     }
@@ -186,7 +191,8 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       const allBatches = get().items.flatMap((i) => i.batches);
       const b = allBatches.find((batch) => batch.id === itemToRemove.batchId);
       const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
-      const refundAmt = isLoaf ? itemToRemove.amount / 16 : itemToRemove.amount;
+      const loafCap = b?.slicesPerLoaf || 8;
+      const refundAmt = isLoaf ? itemToRemove.amount / loafCap : itemToRemove.amount;
       get().incrementBatch(itemToRemove.batchId, refundAmt);
     }
     set({ prepItems: currentPrep.filter((p) => p.id !== id) });
@@ -487,6 +493,20 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       await get().fetchPantry();
     } catch (e) {
       console.error('Failed to update batch dates:', e);
+    }
+  },
+
+  updateBatchSlices: async (batchId, slicesPerLoaf) => {
+    sound.playPop();
+    try {
+      await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, slicesPerLoaf }),
+      });
+      await get().fetchPantry();
+    } catch (e) {
+      console.error('Failed to update batch slices:', e);
     }
   },
 

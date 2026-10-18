@@ -24,6 +24,16 @@ export function extractBatchSize(notes?: string | null): 'small' | 'medium' | 'l
   return 'medium';
 }
 
+export function extractLoafSlices(notes?: string | null): number {
+  if (!notes) return 8;
+  const match = notes.match(/slices:\s*(\d+)/i);
+  if (match && match[1]) {
+    const val = parseInt(match[1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  return 8;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -69,6 +79,7 @@ export async function GET(request: Request) {
         batches: activeBatches.map((b) => ({
           ...b,
           size: extractBatchSize(b.notes),
+          slicesPerLoaf: extractLoafSlices(b.notes),
           freshness: getFreshnessStatus(b.expiresAt),
           daysLeft: Math.ceil((b.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
         })),
@@ -109,9 +120,13 @@ export async function POST(request: Request) {
       : calculateExpiryDate(item.slug, item.category, location as StorageLocation, finalObtainedAt);
 
     const finalSize = size || extractBatchSize(notes);
+    const slicesCount = body.slicesPerLoaf || body.newSlices;
     let finalNotes = notes || null;
     if (finalSize && finalSize !== 'medium') {
       finalNotes = finalNotes ? `${finalNotes} size:${finalSize}` : `size:${finalSize}`;
+    }
+    if (slicesCount && Number(slicesCount) > 0) {
+      finalNotes = finalNotes ? `${finalNotes} slices:${slicesCount}` : `slices:${slicesCount}`;
     }
 
     const batch = await prisma.pantryItemBatch.create({
@@ -136,7 +151,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize } = body;
+    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize, newSlices, slicesPerLoaf } = body;
 
     if (!batchId) {
       return NextResponse.json({ success: false, error: 'batchId is required' }, { status: 400 });
@@ -182,7 +197,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Relocation, size, or date update
+    // Relocation, size, slices, or date update
     const updateData: { location?: string; expiresAt?: Date; notes?: string } = {};
     if (newLocation && newLocation !== existingBatch.location) {
       updateData.location = newLocation;
@@ -197,13 +212,24 @@ export async function PATCH(request: Request) {
     if (newExpiresAt) {
       updateData.expiresAt = new Date(newExpiresAt);
     }
-    if (newNotes !== undefined) {
-      updateData.notes = newNotes;
-    }
-    if (newSize) {
-      const baseNotes = (newNotes !== undefined ? newNotes : existingBatch.notes) || '';
-      const cleaned = baseNotes.replace(/size:\s*(small|medium|large)/gi, '').trim();
-      updateData.notes = newSize !== 'medium' ? (cleaned ? `${cleaned} size:${newSize}` : `size:${newSize}`) : (cleaned || undefined);
+    
+    // Notes, Size, and SlicesPerLoaf updates
+    const targetSlices = newSlices !== undefined ? Number(newSlices) : slicesPerLoaf !== undefined ? Number(slicesPerLoaf) : undefined;
+    if (newNotes !== undefined || newSize || targetSlices !== undefined) {
+      let baseNotes = (newNotes !== undefined ? newNotes : existingBatch.notes) || '';
+      if (newSize) {
+        baseNotes = baseNotes.replace(/size:\s*(small|medium|large)/gi, '').trim();
+        if (newSize !== 'medium') {
+          baseNotes = baseNotes ? `${baseNotes} size:${newSize}` : `size:${newSize}`;
+        }
+      }
+      if (targetSlices !== undefined) {
+        baseNotes = baseNotes.replace(/slices:\s*\d+/gi, '').trim();
+        if (targetSlices > 0) {
+          baseNotes = baseNotes ? `${baseNotes} slices:${targetSlices}` : `slices:${targetSlices}`;
+        }
+      }
+      updateData.notes = baseNotes || undefined;
     }
 
     const updated = await prisma.pantryItemBatch.update({

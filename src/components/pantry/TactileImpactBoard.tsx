@@ -36,6 +36,7 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
       const latest = prepItems[prepItems.length - 1];
       setImpactSlug(latest.slug);
       setLastImpactTime(Date.now());
+      sound.playSizzle();
 
       const now = Date.now();
       const newParticles: SizzleParticle[] = [];

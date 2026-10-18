@@ -203,38 +203,51 @@ class SoundEngine {
     } catch {}
   }
 
-  // Hot pan sizzle on ingredient drop
+  // Hot pan sizzle on ingredient drop (rich 0.85s searing skillet crackle)
   public playSizzle() {
+    this.triggerHaptic('slice');
     if (this.muted) return;
     const ctx = this.initCtx();
     if (!ctx) return;
 
     try {
       const now = ctx.currentTime;
-      const bufferSize = ctx.sampleRate * 0.22;
+      const duration = 0.85;
+      const bufferSize = Math.floor(ctx.sampleRate * duration);
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
+
+      // Generate sizzling oil crackle with random micro-bursts
       for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        const t = i / bufferSize;
+        const baseNoise = Math.random() * 2 - 1;
+        // Random sizzle droplets (bursts of hot oil)
+        const microBurst = Math.random() < 0.035 ? (Math.random() * 1.8 - 0.9) : 0;
+        // Natural sizzle envelope: fast attack, steady sizzle, gradual gentle decay
+        const envelope = t < 0.08 ? t / 0.08 : Math.pow(1 - (t - 0.08) / 0.92, 1.4);
+        output[i] = (baseNoise * 0.7 + microBurst * 0.3) * envelope;
       }
 
       const whiteNoise = ctx.createBufferSource();
       whiteNoise.buffer = noiseBuffer;
 
+      // Bandpass filter centered at 3000Hz gives that distinct hot butter/oil sizzle tone
       const filter = ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.setValueAtTime(1400, now);
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(3200, now);
+      filter.Q.setValueAtTime(1.8, now);
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.linearRampToValueAtTime(0.32, now + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
       whiteNoise.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
 
       whiteNoise.start(now);
-      whiteNoise.stop(now + 0.22);
+      whiteNoise.stop(now + duration);
     } catch {}
   }
 

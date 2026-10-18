@@ -19,7 +19,7 @@ interface BatchAdjustModalProps {
 }
 
 export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: BatchAdjustModalProps) {
-  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize } = usePantryStore();
+  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize, updateBatchSlices } = usePantryStore();
 
   // All React hooks MUST be at the top level unconditionally
   const [expiryDate, setExpiryDate] = useState<string>(
@@ -28,6 +28,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
   const [location, setLocation] = useState<StorageLocation>(batch?.location || 'fridge');
   const [quantity, setQuantity] = useState<number>(batch?.quantity || 1);
   const [batchSize, setBatchSize] = useState<'small' | 'medium' | 'large'>(batch?.size || 'medium');
+  const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(batch?.slicesPerLoaf || 8);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -38,6 +39,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
       setLocation(batch.location);
       setQuantity(batch.quantity);
       setBatchSize(batch.size || 'medium');
+      setSlicesPerLoaf(batch.slicesPerLoaf || 8);
       setConfirmDelete(false);
     }
   }, [batch]);
@@ -58,6 +60,12 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
   const unitLower = (batch.unit || '').toLowerCase();
   const isGrams = ['g', 'gram', 'grams'].includes(unitLower);
   const isMl = ['ml', 'milliliter'].includes(unitLower);
+  const isBread =
+    item.slug === 'bread' ||
+    item.name.toLowerCase().includes('bread') ||
+    ['slice', 'slices', 'loaf', 'loaves'].includes(unitLower);
+
+  const isLoafUnit = ['loaf', 'loaves'].includes(unitLower);
 
   const spiceGramPresets = [
     { label: '10g', val: 10 },
@@ -94,6 +102,41 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     { label: '-50ml', delta: -50 },
   ];
 
+  const breadLoafPresets = [
+    { label: '1 loaf', val: 1 },
+    { label: '½ loaf', val: 0.5 },
+    { label: '2 loaves', val: 2 },
+    { label: '¼ loaf', val: 0.25 },
+    { label: '3 loaves', val: 3 },
+  ];
+
+  const breadLoafDeltas = [
+    { label: '+1 slice', delta: 1 / slicesPerLoaf },
+    { label: '-1 slice', delta: -1 / slicesPerLoaf },
+    { label: '+2 slices', delta: 2 / slicesPerLoaf },
+    { label: '-2 slices', delta: -2 / slicesPerLoaf },
+    { label: '+½ loaf', delta: 0.5 },
+    { label: '-½ loaf', delta: -0.5 },
+  ];
+
+  const breadSlicePresets = [
+    { label: `${slicesPerLoaf} (1 loaf)`, val: slicesPerLoaf },
+    { label: `${Math.round(slicesPerLoaf / 2)} (½ loaf)`, val: Math.round(slicesPerLoaf / 2) },
+    { label: `${slicesPerLoaf * 2} (2 loaves)`, val: slicesPerLoaf * 2 },
+    { label: '4 slices', val: 4 },
+    { label: '2 slices', val: 2 },
+    { label: '1 slice', val: 1 },
+  ];
+
+  const breadSliceDeltas = [
+    { label: '+1 slice', delta: 1 },
+    { label: '-1 slice', delta: -1 },
+    { label: '+2 slices', delta: 2 },
+    { label: '-2 slices', delta: -2 },
+    { label: `+${Math.round(slicesPerLoaf / 2)} (½ loaf)`, delta: Math.round(slicesPerLoaf / 2) },
+    { label: `-${Math.round(slicesPerLoaf / 2)} (½ loaf)`, delta: -Math.round(slicesPerLoaf / 2) },
+  ];
+
   const producePresets = [
     { label: '⅛', val: 0.125 },
     { label: '¼', val: 0.25 },
@@ -119,13 +162,17 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     { label: '-1', delta: -1 },
   ];
 
-  const quickPresets = isSpice && isGrams
+  const quickPresets = isBread
+    ? (isLoafUnit ? breadLoafPresets : breadSlicePresets)
+    : isSpice && isGrams
     ? spiceGramPresets
     : isSpice && isMl
     ? spiceMlPresets
     : producePresets;
 
-  const quickDeltas = isSpice && isGrams
+  const quickDeltas = isBread
+    ? (isLoafUnit ? breadLoafDeltas : breadSliceDeltas)
+    : isSpice && isGrams
     ? spiceGramDeltas
     : isSpice && isMl
     ? spiceMlDeltas
@@ -141,6 +188,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     }
     if (batchSize !== (batch.size || 'medium')) {
       await updateBatchSize(batch.id, batchSize);
+    }
+    if (isBread && slicesPerLoaf !== (batch.slicesPerLoaf || 8)) {
+      await updateBatchSlices(batch.id, slicesPerLoaf);
     }
     const finalQuantity = isSpice ? quantity : snapToCulinaryFraction(quantity);
     if (finalQuantity !== batch.quantity) {
@@ -168,7 +218,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-[#faf8f5] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#e8e2d8] shadow-2xl relative">
+      <div className="bg-[#faf8f5] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#e8e2d8] shadow-2xl relative max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -210,7 +260,11 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
               Stock Quantity ({batch.unit})
             </label>
             <span className="text-xs font-sans font-medium text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
-              Visual: {formatQuantityWithCulinaryFraction(quantity).display} {batch.unit}
+              Visual: {isBread
+                ? isLoafUnit
+                  ? `${formatQuantityWithCulinaryFraction(quantity).display} loaf (${snapToCulinaryFraction(quantity * slicesPerLoaf)} slices)`
+                  : `${formatQuantityWithCulinaryFraction(quantity).display} slices (${(quantity / slicesPerLoaf).toFixed(1)} loaf)`
+                : `${formatQuantityWithCulinaryFraction(quantity).display} ${batch.unit}`}
             </span>
           </div>
 
@@ -269,6 +323,53 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
             </div>
           </div>
         </div>
+
+        {/* Loaf Slice Capacity Configuration */}
+        {isBread && (
+          <div className="mb-5 bg-[#fbf9f5] border border-[#e8e2d8] rounded-2xl p-3.5">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
+                Loaf Slice Capacity
+              </label>
+              <span className="text-xs font-mono font-bold text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
+                {slicesPerLoaf} slices / loaf
+              </span>
+            </div>
+            <p className="text-[11px] text-[#8c8276] mb-2.5">
+              1 loaf = {slicesPerLoaf} slices. Taking 1 slice deducts 1/{slicesPerLoaf} from the loaf without making it disappear!
+            </p>
+
+            <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5 no-scrollbar mb-2.5">
+              {[6, 8, 10, 12, 14, 16, 20].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setSlicesPerLoaf(num)}
+                  className={`px-2.5 py-1 text-xs font-sans rounded-lg border transition-all cursor-pointer shrink-0 ${
+                    slicesPerLoaf === num
+                      ? 'bg-[#cc5a35] text-white border-[#cc5a35] font-semibold shadow-2xs'
+                      : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border-[#e8e2d8]'
+                  }`}
+                >
+                  {num} slices
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-[#796f64] shrink-0 font-sans">Custom:</span>
+              <input
+                type="number"
+                min="1"
+                max="64"
+                value={slicesPerLoaf}
+                onChange={(e) => setSlicesPerLoaf(Math.max(1, parseInt(e.target.value) || 8))}
+                className="w-20 px-2.5 py-1 bg-white border border-[#e8e2d8] rounded-lg text-xs font-mono font-bold text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
+              />
+              <span className="text-xs text-[#796f64]">slices per whole loaf</span>
+            </div>
+          </div>
+        )}
 
         {/* Physical Size Tier Switcher */}
         {!isSpice && (
