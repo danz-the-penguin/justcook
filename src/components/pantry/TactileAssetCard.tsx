@@ -449,8 +449,58 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
               setFocusedBatchId(null);
             }
           }}
-          className="relative min-h-[124px] sm:min-h-[148px] bg-[#faf8f5] border border-[#e5dec9] rounded-xl p-3 sm:p-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
+          className="relative min-h-[190px] sm:min-h-[230px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
+          {/* Top Focus Banner: Clean, non-overlapping controller for the selected batch */}
+          {focusedBatch && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full mb-3 px-3.5 py-2 rounded-xl bg-[#faeee8] border border-[#f0d9cf] flex items-center justify-between shadow-2xs z-20"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
+                <span className="font-serif text-sm sm:text-base font-medium text-[#201b16] capitalize">
+                  {focusedBatch.size || 'medium'} Batch
+                </span>
+                <span className="text-xs font-mono font-bold text-[#cc5a35] bg-white px-2 py-0.5 rounded-md border border-[#f0d9cf]">
+                  {formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} {unit}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleDecrement}
+                  className="w-7 h-7 rounded-lg bg-white hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-sm flex items-center justify-center border border-[#e8e2d8] shadow-2xs transition-all active:scale-90 cursor-pointer"
+                  title={`Subtract ${currentStep.label} from this ${focusedBatch.size || 'medium'} batch`}
+                >
+                  -
+                </button>
+                <span className="text-xs font-mono font-bold text-[#cc5a35] px-1">
+                  ±{currentStep.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleIncrement}
+                  className="w-7 h-7 rounded-lg bg-[#cc5a35] hover:bg-[#b54926] text-white font-bold text-sm flex items-center justify-center shadow-2xs transition-all active:scale-90 cursor-pointer"
+                  title={`Add ${currentStep.label} to this ${focusedBatch.size || 'medium'} batch`}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFocusedBatchId(null)}
+                  className="ml-1 text-xs text-[#8c8276] hover:text-[#201b16] font-medium p-1 hover:bg-white/80 rounded-md transition-colors"
+                  title="Deselect"
+                >
+                  ✕
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Knife Blade Slash Flash Effect on Slice */}
           <AnimatePresence>
             {isSlicing && (
@@ -466,211 +516,181 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
             )}
           </AnimatePresence>
 
-          {/* Visual Sprites with Framer Motion AnimatePresence */}
-          <AnimatePresence mode="popLayout">
-            {sprites.map((s, idx) => {
-              const spriteAmount = s.isPartial ? s.fraction : (isSpice ? currentStep.val : 1);
-              const isFocused = Boolean(s.batchId && s.batchId === focusedBatchId);
-              return (
-                <motion.div
-                  key={s.id}
-                  layout
-                  drag
-                  dragSnapToOrigin
-                  dragElastic={0.25}
-                  whileDrag={{
-                    scale: s.scaleFactor * 1.25,
-                    rotate: idx % 2 === 0 ? 8 : -8,
-                    zIndex: 9999,
-                    filter: 'drop-shadow(0 14px 22px rgba(0,0,0,0.35))',
-                  }}
-                  whileTap={{ scale: s.scaleFactor * 0.95 }}
-                  onDragStart={() => {
-                    setIsDraggingAny(true);
-                    sound.triggerHaptic('light');
-                  }}
-                  onDragEnd={(e, info) => {
-                    handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
-                  }}
-                  onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
-                  initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
-                  animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
-                  exit={{
-                    scale: 0,
-                    y: -15,
-                    opacity: 0,
-                    rotate: idx % 2 === 0 ? 15 : -15,
-                    transition: { duration: 0.18 },
-                  }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 25 }}
-                  className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-all ${
-                    isFocused
-                      ? 'ring-2 ring-[#cc5a35] ring-offset-2 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/60 shadow-md p-1.5 z-20'
-                      : 'hover:scale-105'
-                  }`}
-                  title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Tap to focus & subtract/add, or drag to pan!`}
-                >
-                  {/* Floating Focus Badge */}
-                  {isFocused && (
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#cc5a35] text-white text-[9px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs whitespace-nowrap z-30 uppercase tracking-wider animate-in fade-in zoom-in-75 duration-150 pointer-events-none">
-                      Focus ({s.sizeTier.toUpperCase()})
-                    </span>
-                  )}
-
-                  {/* Mini On-Sprite Stepper when Focused */}
-                  {isFocused && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-white/95 border border-[#e8e2d8] rounded-full px-1.5 py-0.5 shadow-lg z-30 space-x-1 backdrop-blur-xs animate-in fade-in slide-in-from-top-1 duration-150"
-                    >
-                      <button
-                        type="button"
-                        onClick={handleDecrement}
-                        className="w-5 h-5 rounded-full bg-[#f2ede4] hover:bg-[#cc5a35] hover:text-white text-[#201b16] font-bold text-xs flex items-center justify-center transition-colors active:scale-90 cursor-pointer"
-                        title={`Subtract ${currentStep.label} from this ${s.sizeTier} batch`}
-                      >
-                        -
-                      </button>
-                      <span className="text-[10px] font-mono font-bold text-[#cc5a35] px-1 whitespace-nowrap">
-                        ±{currentStep.label}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleIncrement}
-                        className="w-5 h-5 rounded-full bg-[#cc5a35] text-white font-bold text-xs flex items-center justify-center transition-colors active:scale-90 hover:bg-[#b54926] cursor-pointer"
-                        title={`Add ${currentStep.label} to this ${s.sizeTier} batch`}
-                      >
-                        +
-                      </button>
+          {/* Visual Sprites Area: Spacious flex grid with breathing room */}
+          <div className="w-full flex-1 flex flex-wrap items-center justify-center gap-4 sm:gap-6 py-2">
+            <AnimatePresence mode="popLayout">
+              {sprites.map((s, idx) => {
+                const spriteAmount = s.isPartial ? s.fraction : (isSpice ? currentStep.val : 1);
+                const isFocused = Boolean(s.batchId && s.batchId === focusedBatchId);
+                return (
+                  <motion.div
+                    key={s.id}
+                    layout
+                    drag
+                    dragSnapToOrigin
+                    dragElastic={0.25}
+                    whileDrag={{
+                      scale: s.scaleFactor * 1.25,
+                      rotate: idx % 2 === 0 ? 8 : -8,
+                      zIndex: 9999,
+                      filter: 'drop-shadow(0 14px 22px rgba(0,0,0,0.35))',
+                    }}
+                    whileTap={{ scale: s.scaleFactor * 0.95 }}
+                    onDragStart={() => {
+                      setIsDraggingAny(true);
+                      sound.triggerHaptic('light');
+                    }}
+                    onDragEnd={(e, info) => {
+                      handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
+                    }}
+                    onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
+                    initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
+                    animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
+                    exit={{
+                      scale: 0,
+                      y: -15,
+                      opacity: 0,
+                      rotate: idx % 2 === 0 ? 15 : -15,
+                      transition: { duration: 0.18 },
+                    }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 25 }}
+                    className={`relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center transition-all ${
+                      isFocused
+                        ? 'ring-2.5 ring-[#cc5a35] ring-offset-3 ring-offset-[#faf8f5] rounded-2xl bg-[#faeee8]/40 shadow-sm p-2 z-20'
+                        : focusedBatchId
+                        ? 'opacity-40 hover:opacity-100 transition-opacity p-2'
+                        : 'hover:scale-105 p-2'
+                    }`}
+                    title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Tap to focus & adjust, or drag to pan`}
+                  >
+                  {s.isJar ? (
+                    /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
+                    <div className="relative flex flex-col items-center justify-center p-1.5 hover:scale-105 transition-transform select-none">
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                        <Image
+                          src={assetSrc}
+                          alt={item.name}
+                          width={96}
+                          height={96}
+                          className="object-contain pointer-events-none drop-shadow-md max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                          priority={idx < 4}
+                        />
+                        {/* Dynamic Glass Level Gauge */}
+                        <div
+                          className="absolute -right-1 bottom-1 w-3 h-12 bg-[#e8e2d8]/90 rounded-full border border-white/80 overflow-hidden flex flex-col justify-end p-[1.5px] shadow-2xs backdrop-blur-xs"
+                          title={`Fill level: ${s.fillPercent}% (${s.fillStatus})`}
+                        >
+                          <div
+                            className="w-full rounded-full transition-all duration-300"
+                            style={{
+                              height: `${s.fillPercent}%`,
+                              backgroundColor:
+                                (s.fillPercent || 100) > 40
+                                  ? '#cc5a35'
+                                  : (s.fillPercent || 100) > 20
+                                  ? '#d97706'
+                                  : '#dc2626',
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {s.jarLabel && (
+                        <div className="mt-1.5 flex items-center space-x-1">
+                          <span className="bg-[#201b16] text-[#faf8f5] text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-full shadow-xs border border-white/30 whitespace-nowrap leading-none tracking-tight">
+                            {s.jarLabel}
+                          </span>
+                          {s.fillStatus && (
+                            <span
+                              className={`text-[9px] font-sans font-bold px-1.5 py-0.5 rounded border leading-none ${
+                                s.fillStatus === 'Low'
+                                  ? 'bg-[#faeee8] text-[#cc5a35] border-[#f0d9cf]'
+                                  : 'bg-[#f4efe6] text-[#6b6255] border-[#e2dacb]'
+                              }`}
+                            >
+                              {s.fillStatus}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                {s.isJar ? (
-                  /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
-                  <div className="relative flex flex-col items-center justify-center p-1 hover:scale-105 transition-transform select-none">
-                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                  ) : !s.isPartial ? (
+                    /* Full Whole Sprite - Spacious & Clear */
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
                       <Image
                         src={assetSrc}
                         alt={item.name}
-                        width={72}
-                        height={72}
-                        className="object-contain pointer-events-none drop-shadow-md max-h-16 sm:max-h-18"
+                        width={96}
+                        height={96}
+                        className="object-contain pointer-events-none drop-shadow-sm max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
                         priority={idx < 4}
                       />
-                      {/* Dynamic Glass Level Gauge */}
-                      <div
-                        className="absolute -right-1 bottom-1 w-2.5 h-10 bg-[#e8e2d8]/90 rounded-full border border-white/80 overflow-hidden flex flex-col justify-end p-[1.5px] shadow-2xs backdrop-blur-xs"
-                        title={`Fill level: ${s.fillPercent}% (${s.fillStatus})`}
-                      >
-                        <div
-                          className="w-full rounded-full transition-all duration-300"
-                          style={{
-                            height: `${s.fillPercent}%`,
-                            backgroundColor:
-                              (s.fillPercent || 100) > 40
-                                ? '#cc5a35'
-                                : (s.fillPercent || 100) > 20
-                                ? '#d97706'
-                                : '#dc2626',
-                          }}
+                      {s.sizeTier !== 'medium' && (
+                        <span
+                          className={`absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs border border-white/70 leading-none ${
+                            s.sizeTier === 'small' ? 'bg-[#2d5930] text-white' : 'bg-[#cc5a35] text-white'
+                          }`}
+                        >
+                          {s.sizeTier === 'small' ? 'S' : 'L'}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    /* Fractional Cut Slice Sprite (1/8, 1/4, 1/3, 1/2, etc.) */
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                      {/* Background Silhouette Ghost */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-25 grayscale pointer-events-none">
+                        <Image
+                          src={assetSrc}
+                          alt={item.name}
+                          width={96}
+                          height={96}
+                          className="object-contain max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
                         />
                       </div>
-                    </div>
-                    {s.jarLabel && (
-                      <div className="mt-1 flex items-center space-x-1">
-                        <span className="bg-[#201b16] text-[#faf8f5] text-[10px] font-mono font-medium px-2 py-0.5 rounded-full shadow-xs border border-white/30 whitespace-nowrap leading-none tracking-tight">
-                          {s.jarLabel}
-                        </span>
-                        {s.fillStatus && (
-                          <span
-                            className={`text-[9px] font-sans font-bold px-1 py-0.5 rounded border leading-none ${
-                              s.fillStatus === 'Low'
-                                ? 'bg-[#faeee8] text-[#cc5a35] border-[#f0d9cf]'
-                                : 'bg-[#f4efe6] text-[#6b6255] border-[#e2dacb]'
-                            }`}
-                          >
-                            {s.fillStatus}
-                          </span>
-                        )}
+
+                      {/* Foreground Clipped Slice */}
+                      <div
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        style={{
+                          clipPath: `inset(0 ${Math.round((1 - s.fraction) * 1000) / 10}% 0 0)`,
+                        }}
+                      >
+                        <Image
+                          src={assetSrc}
+                          alt={item.name}
+                          width={96}
+                          height={96}
+                          className="object-contain drop-shadow-sm max-h-20 sm:max-h-24 max-w-20 sm:max-w-24"
+                        />
                       </div>
-                    )}
-                  </div>
-                ) : !s.isPartial ? (
-                  /* Full Whole Sprite */
-                  <div className="relative w-14 h-14 sm:w-18 sm:h-18 flex items-center justify-center hover:scale-110 transition-transform">
-                    <Image
-                      src={assetSrc}
-                      alt={item.name}
-                      width={72}
-                      height={72}
-                      className="object-contain pointer-events-none drop-shadow-sm"
-                      priority={idx < 4}
-                    />
-                    {s.sizeTier !== 'medium' && (
+
+                      {/* Knife Cut Line Edge */}
+                      <div
+                        className="absolute top-1 bottom-1 w-[1.5px] border-r border-dashed border-[#cc5a35]/80 pointer-events-none"
+                        style={{
+                          left: `${Math.round(s.fraction * 1000) / 10}%`,
+                        }}
+                      />
+
+                      {/* Fraction & Size Pill Tag */}
                       <span
-                        className={`absolute -bottom-1 -right-1 z-10 text-[9px] font-sans font-bold px-1.5 py-0.5 rounded-full shadow-xs border border-white/60 leading-none ${
-                          s.sizeTier === 'small' ? 'bg-[#2d5930] text-white' : 'bg-[#cc5a35] text-white'
+                        className={`absolute -bottom-1 -right-1 z-10 text-[11px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs border border-white/70 leading-none ${
+                          s.sizeTier === 'small'
+                            ? 'bg-[#2d5930] text-white'
+                            : s.sizeTier === 'large'
+                            ? 'bg-[#cc5a35] text-white'
+                            : 'bg-[#201b16] text-[#faf8f5]'
                         }`}
                       >
-                        {s.sizeTier === 'small' ? 'S' : 'L'}
+                        {s.fractionLabel}{s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
                       </span>
-                    )}
-                  </div>
-                ) : (
-                  /* Fractional Cut Slice Sprite (1/8, 1/4, 1/3, 1/2, etc.) */
-                  <div className="relative w-14 h-14 sm:w-18 sm:h-18 flex items-center justify-center hover:scale-110 transition-transform">
-                    {/* Background Silhouette Ghost: full item faded so original shape is recognizable */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-25 grayscale pointer-events-none">
-                      <Image
-                        src={assetSrc}
-                        alt={item.name}
-                        width={72}
-                        height={72}
-                        className="object-contain"
-                      />
                     </div>
-
-                    {/* Foreground Clipped Slice */}
-                    <div
-                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                      style={{
-                        clipPath: `inset(0 ${Math.round((1 - s.fraction) * 1000) / 10}% 0 0)`,
-                      }}
-                    >
-                      <Image
-                        src={assetSrc}
-                        alt={item.name}
-                        width={72}
-                        height={72}
-                        className="object-contain drop-shadow-sm"
-                      />
-                    </div>
-
-                    {/* Knife Cut Line Edge */}
-                    <div
-                      className="absolute top-1 bottom-1 w-[1.5px] border-r border-dashed border-[#cc5a35]/80 pointer-events-none"
-                      style={{
-                        left: `${Math.round(s.fraction * 1000) / 10}%`,
-                      }}
-                    />
-
-                    {/* Fraction & Size Pill Tag */}
-                    <span
-                      className={`absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-1.5 py-0.5 rounded-full shadow-xs border border-white/60 leading-none ${
-                        s.sizeTier === 'small'
-                          ? 'bg-[#2d5930] text-white'
-                          : s.sizeTier === 'large'
-                          ? 'bg-[#cc5a35] text-white'
-                          : 'bg-[#201b16] text-[#faf8f5]'
-                      }`}
-                    >
-                      {s.fractionLabel}{s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
-                    </span>
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
-          </AnimatePresence>
+                  )}
+                </motion.div>
+              );
+            })}
+            </AnimatePresence>
+          </div>
 
           {/* Quick "Add 2nd Jar" option for spices when only 1 jar exists */}
           {isSpice && sprites.length === 1 && totalQty > 0 && (
