@@ -91,9 +91,12 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
   // Build sprite list supporting whole, fractional slices, and spice jars
   interface SpriteItem {
     id: string;
+    batchId?: string;
     fraction: number;
     isPartial: boolean;
     fractionLabel?: string;
+    sizeTier: 'small' | 'medium' | 'large';
+    scaleFactor: number;
     isJar?: boolean;
     jarIndex?: number;
     jarLabel?: string;
@@ -139,8 +142,11 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
 
       sprites.push({
         id: `${item.id}-jar-${i}`,
+        batchId: activeBatches[i]?.id,
         fraction: 1,
         isPartial: false,
+        sizeTier: 'medium',
+        scaleFactor: 1.0,
         isJar: true,
         jarIndex: i,
         jarLabel,
@@ -150,33 +156,93 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     }
     overflowCount = Math.max(0, jarCount - 6);
   } else {
-    // Discrete items with fractional slicing (1/8, 1/4, 1/3, 1/2, etc.)
-    const wholeCount = Math.floor(totalQty);
-    const remainder = snapToCulinaryFraction(totalQty - wholeCount);
-    const wholeToShow = Math.min(wholeCount, maxSprites);
+    // Discrete items with per-batch size tiers & fractional slicing
+    const activeBatches = item.batches.filter((b) => b.quantity > 0.005);
 
-    for (let i = 0; i < wholeToShow; i++) {
-      sprites.push({ id: `${item.id}-whole-${i}`, fraction: 1, isPartial: false });
+    if (activeBatches.length > 0) {
+      let spritesAdded = 0;
+
+      for (const batch of activeBatches) {
+        if (spritesAdded >= maxSprites) break;
+
+        const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
+        const scaleFactor = sizeTier === 'small' ? 0.8 : sizeTier === 'large' ? 1.25 : 1.0;
+        const bQty = snapToCulinaryFraction(batch.quantity);
+        const wholeCount = Math.floor(bQty);
+        const remainder = snapToCulinaryFraction(bQty - wholeCount);
+
+        const wholeToShow = Math.min(wholeCount, maxSprites - spritesAdded);
+        for (let i = 0; i < wholeToShow; i++) {
+          sprites.push({
+            id: `${batch.id}-whole-${i}`,
+            batchId: batch.id,
+            fraction: 1,
+            isPartial: false,
+            sizeTier,
+            scaleFactor,
+          });
+          spritesAdded++;
+        }
+
+        if (remainder >= 0.04 && spritesAdded < maxSprites) {
+          const fracInfo = formatQuantityWithCulinaryFraction(remainder);
+          sprites.push({
+            id: `${batch.id}-partial`,
+            batchId: batch.id,
+            fraction: fracInfo.fractionValue,
+            isPartial: true,
+            fractionLabel: fracInfo.fractionLabel,
+            sizeTier,
+            scaleFactor,
+          });
+          spritesAdded++;
+        }
+      }
+
+      const totalLogicalSprites = activeBatches.reduce((acc, b) => {
+        const w = Math.floor(b.quantity);
+        const r = snapToCulinaryFraction(b.quantity - w);
+        return acc + w + (r >= 0.04 ? 1 : 0);
+      }, 0);
+      overflowCount = Math.max(0, totalLogicalSprites - maxSprites);
+    } else {
+      // Fallback for empty or newly generated items
+      const wholeCount = Math.floor(totalQty);
+      const remainder = snapToCulinaryFraction(totalQty - wholeCount);
+      const wholeToShow = Math.min(wholeCount, maxSprites);
+
+      for (let i = 0; i < wholeToShow; i++) {
+        sprites.push({
+          id: `${item.id}-whole-${i}`,
+          fraction: 1,
+          isPartial: false,
+          sizeTier: 'medium',
+          scaleFactor: 1.0,
+        });
+      }
+
+      if (remainder >= 0.04 && sprites.length < maxSprites) {
+        const fracInfo = formatQuantityWithCulinaryFraction(remainder);
+        sprites.push({
+          id: `${item.id}-partial`,
+          fraction: fracInfo.fractionValue,
+          isPartial: true,
+          fractionLabel: fracInfo.fractionLabel,
+          sizeTier: 'medium',
+          scaleFactor: 1.0,
+        });
+      }
+
+      const totalLogicalSprites = wholeCount + (remainder >= 0.04 ? 1 : 0);
+      overflowCount = Math.max(0, totalLogicalSprites - maxSprites);
     }
-
-    if (remainder >= 0.04 && sprites.length < maxSprites) {
-      const fracInfo = formatQuantityWithCulinaryFraction(remainder);
-      sprites.push({
-        id: `${item.id}-partial`,
-        fraction: fracInfo.fractionValue,
-        isPartial: true,
-        fractionLabel: fracInfo.fractionLabel,
-      });
-    }
-
-    const totalLogicalSprites = wholeCount + (remainder >= 0.04 ? 1 : 0);
-    overflowCount = Math.max(0, totalLogicalSprites - maxSprites);
   }
 
   const handleSpriteDragEnd = (
     _e: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
-    spriteAmount: number = 1
+    spriteAmount: number = 1,
+    targetBatchId?: string
   ) => {
     setIsDraggingAny(false);
     lastDragEndTimeRef.current = Date.now();
@@ -208,14 +274,14 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     if (isOverDropZone) {
       setIsSlicing(true);
       setTimeout(() => setIsSlicing(false), 280);
-      dropItemToPrepBoard(item, spriteAmount);
+      dropItemToPrepBoard(item, spriteAmount, targetBatchId);
     } else {
       // Elastic return to shelf
       sound.playDropImpact();
     }
   };
 
-  const handleSpriteClick = (e: React.MouseEvent, spriteAmount?: number) => {
+  const handleSpriteClick = (e: React.MouseEvent, spriteAmount?: number, targetBatchId?: string) => {
     e.stopPropagation();
     // If a drag just ended, ignore the trailing synthetic click event!
     if (Date.now() - lastDragEndTimeRef.current < 400) {
@@ -229,7 +295,7 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
     } else {
       sound.playPop();
     }
-    dropItemToPrepBoard(item, amountToUse);
+    dropItemToPrepBoard(item, amountToUse, targetBatchId);
   };
 
   const handleIncrement = (e: React.MouseEvent) => {
@@ -380,22 +446,22 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                   dragSnapToOrigin
                   dragElastic={0.25}
                   whileDrag={{
-                    scale: 1.25,
+                    scale: s.scaleFactor * 1.25,
                     rotate: idx % 2 === 0 ? 8 : -8,
                     zIndex: 9999,
                     filter: 'drop-shadow(0 14px 22px rgba(0,0,0,0.35))',
                   }}
-                  whileTap={{ scale: 0.95 }}
+                  whileTap={{ scale: s.scaleFactor * 0.95 }}
                   onDragStart={() => {
                     setIsDraggingAny(true);
                     sound.triggerHaptic('light');
                   }}
                   onDragEnd={(e, info) => {
-                    handleSpriteDragEnd(e, info, spriteAmount);
+                    handleSpriteDragEnd(e, info, spriteAmount, s.batchId);
                   }}
-                  onClick={(e) => handleSpriteClick(e, spriteAmount)}
+                  onClick={(e) => handleSpriteClick(e, spriteAmount, s.batchId)}
                 initial={{ scale: 0, y: -12, rotate: idx % 2 === 0 ? -6 : 6 }}
-                animate={{ scale: 1, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
+                animate={{ scale: s.scaleFactor, y: 0, rotate: idx % 3 === 0 ? -3 : idx % 3 === 1 ? 3 : 0 }}
                 exit={{
                   scale: 0,
                   y: -15,
@@ -404,8 +470,8 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                   transition: { duration: 0.18 },
                 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 25 }}
-                className="relative select-none cursor-grab active:cursor-grabbing touch-none"
-                title="Drag to Chef's Prep Pan or tap to chop on impact!"
+                className="relative select-none cursor-grab active:cursor-grabbing touch-none flex items-center justify-center"
+                title={`${item.name} (${s.sizeTier.toUpperCase()}${s.isPartial ? ` • ${s.fractionLabel}` : ''}) • Drag to pan or tap to chop!`}
               >
                 {s.isJar ? (
                   /* Spice Bottle / Jar Display with tactile dynamic fill level gauge */
@@ -468,6 +534,15 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                       className="object-contain pointer-events-none drop-shadow-sm"
                       priority={idx < 4}
                     />
+                    {s.sizeTier !== 'medium' && (
+                      <span
+                        className={`absolute -bottom-1 -right-1 z-10 text-[9px] font-sans font-bold px-1.5 py-0.5 rounded-full shadow-xs border border-white/60 leading-none ${
+                          s.sizeTier === 'small' ? 'bg-[#2d5930] text-white' : 'bg-[#cc5a35] text-white'
+                        }`}
+                      >
+                        {s.sizeTier === 'small' ? 'S' : 'L'}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   /* Fractional Cut Slice Sprite (1/8, 1/4, 1/3, 1/2, etc.) */
@@ -507,9 +582,17 @@ export function TactileAssetCard({ item, onEditBatch, onEditItem }: TactileAsset
                       }}
                     />
 
-                    {/* Fraction Pill Tag */}
-                    <span className="absolute -bottom-1 -right-1 z-10 bg-[#201b16] text-[#faf8f5] text-[10px] font-sans font-bold px-1.5 py-0.5 rounded-full shadow-xs border border-white/60 leading-none">
-                      {s.fractionLabel}
+                    {/* Fraction & Size Pill Tag */}
+                    <span
+                      className={`absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-1.5 py-0.5 rounded-full shadow-xs border border-white/60 leading-none ${
+                        s.sizeTier === 'small'
+                          ? 'bg-[#2d5930] text-white'
+                          : s.sizeTier === 'large'
+                          ? 'bg-[#cc5a35] text-white'
+                          : 'bg-[#201b16] text-[#faf8f5]'
+                      }`}
+                    >
+                      {s.fractionLabel}{s.sizeTier !== 'medium' ? ` • ${s.sizeTier === 'small' ? 'S' : 'L'}` : ''}
                     </span>
                   </div>
                 )}

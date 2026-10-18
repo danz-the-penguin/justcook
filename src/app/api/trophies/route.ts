@@ -87,3 +87,26 @@ export async function GET() {
     return NextResponse.json({ success: false, error: 'Failed to fetch trophies' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const clearAll = searchParams.get('all') === 'true';
+
+    if (clearAll) {
+      await prisma.rescuedStat.deleteMany({});
+      return NextResponse.json({ success: true, message: 'All rescued food logs cleared.' });
+    }
+
+    if (id) {
+      await prisma.rescuedStat.delete({ where: { id } });
+      return NextResponse.json({ success: true, message: 'Log entry deleted.' });
+    }
+
+    return NextResponse.json({ success: false, error: 'Provide id or all=true' }, { status: 400 });
+  } catch (error) {
+    console.error('Error in DELETE /api/trophies:', error);
+    return NextResponse.json({ success: false, error: 'Failed to delete log entry' }, { status: 500 });
+  }
+}

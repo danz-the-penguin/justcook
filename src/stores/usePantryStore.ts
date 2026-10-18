@@ -11,6 +11,7 @@ export interface PantryBatchData {
   expiresAt: string;
   location: StorageLocation;
   notes?: string | null;
+  size?: 'small' | 'medium' | 'large';
   freshness: 'fresh' | 'use_soon' | 'critical' | 'expired';
   daysLeft: number;
 }
@@ -37,6 +38,7 @@ export interface PrepItem {
   category: string;
   amount: number;
   unit: string;
+  size?: 'small' | 'medium' | 'large';
   droppedAt: number;
 }
 
@@ -57,12 +59,13 @@ interface PantryStore {
   toggleRescueFilter: () => void;
   toggleMute: () => void;
   setPrepBoardOpen: (open: boolean) => void;
-  dropItemToPrepBoard: (item: EnrichedPantryItem, amount?: number) => Promise<void>;
+  dropItemToPrepBoard: (item: EnrichedPantryItem, amount?: number, targetBatchId?: string) => Promise<void>;
   clearPrepItems: () => void;
   removePrepItem: (id: string) => void;
   incrementItem: (slug: string, location: StorageLocation, amount?: number) => Promise<void>;
   decrementBatch: (batchId: string, amount?: number) => Promise<void>;
   updateBatchQuantity: (batchId: string, newQuantity: number) => Promise<void>;
+  updateBatchSize: (batchId: string, size: 'small' | 'medium' | 'large') => Promise<void>;
   deleteBatch: (batchId: string) => Promise<void>;
   deleteItem: (slug: string) => Promise<void>;
   deleteAsset: (slug: string) => Promise<{ success: boolean; error?: string }>;
@@ -75,6 +78,7 @@ interface PantryStore {
     location: StorageLocation;
     quantity: number;
     unit?: string;
+    size?: 'small' | 'medium' | 'large';
     obtainedAt?: string;
     expiresAt?: string;
     notes?: string;
@@ -98,7 +102,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
   setPrepBoardOpen: (open) => set({ isPrepBoardOpen: open }),
 
-  dropItemToPrepBoard: async (item, amount = 1) => {
+  dropItemToPrepBoard: async (item, amount = 1, targetBatchId?: string) => {
     const now = Date.now();
     // Guard against identical item double-drop within 350ms
     if (lastDropSlug === item.slug && now - lastDropTimestamp < 350) {
@@ -108,12 +112,12 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     lastDropTimestamp = now;
 
     sound.playPanImpact();
-    const primaryBatch = item.batches[0];
-    const deductAmt = Math.min(amount, item.totalQuantity > 0 ? amount : 0);
+    const targetBatch = (targetBatchId ? item.batches.find((b) => b.id === targetBatchId) : null) || item.batches[0];
+    const deductAmt = Math.min(amount, targetBatch ? targetBatch.quantity : item.totalQuantity > 0 ? amount : 0);
 
     // Optimistically deduct from inventory if in stock
-    if (primaryBatch && deductAmt > 0) {
-      get().decrementBatch(primaryBatch.id, deductAmt);
+    if (targetBatch && deductAmt > 0) {
+      get().decrementBatch(targetBatch.id, deductAmt);
     }
 
     // Add to prep board with impact animation timestamp
@@ -136,6 +140,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
           category: item.category,
           amount: deductAmt || amount,
           unit: item.defaultUnit,
+          size: targetBatch?.size || 'medium',
           droppedAt: Date.now(),
         },
       ];
@@ -317,6 +322,20 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
     } catch (e) {
       console.error('Failed to update batch quantity:', e);
       set({ items: prevItems });
+    }
+  },
+
+  updateBatchSize: async (batchId, size) => {
+    sound.playPop();
+    try {
+      await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, newSize: size }),
+      });
+      await get().fetchPantry();
+    } catch (e) {
+      console.error('Failed to update batch size:', e);
     }
   },
 

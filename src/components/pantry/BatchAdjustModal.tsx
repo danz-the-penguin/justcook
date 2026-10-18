@@ -19,7 +19,7 @@ interface BatchAdjustModalProps {
 }
 
 export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: BatchAdjustModalProps) {
-  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity } = usePantryStore();
+  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize } = usePantryStore();
 
   // All React hooks MUST be at the top level unconditionally
   const [expiryDate, setExpiryDate] = useState<string>(
@@ -27,6 +27,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
   );
   const [location, setLocation] = useState<StorageLocation>(batch?.location || 'fridge');
   const [quantity, setQuantity] = useState<number>(batch?.quantity || 1);
+  const [batchSize, setBatchSize] = useState<'small' | 'medium' | 'large'>(batch?.size || 'medium');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -36,6 +37,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
       setExpiryDate(batch.expiresAt ? batch.expiresAt.split('T')[0] : '');
       setLocation(batch.location);
       setQuantity(batch.quantity);
+      setBatchSize(batch.size || 'medium');
       setConfirmDelete(false);
     }
   }, [batch]);
@@ -136,6 +138,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     }
     if (expiryDate && expiryDate !== initialExpiry) {
       await updateBatchDates(batch.id, new Date(expiryDate).toISOString());
+    }
+    if (batchSize !== (batch.size || 'medium')) {
+      await updateBatchSize(batch.id, batchSize);
     }
     const finalQuantity = isSpice ? quantity : snapToCulinaryFraction(quantity);
     if (finalQuantity !== batch.quantity) {
@@ -264,6 +269,39 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
             </div>
           </div>
         </div>
+
+        {/* Physical Size Tier Switcher */}
+        {!isSpice && (
+          <div className="mb-5">
+            <label className="block text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider mb-2">
+              Physical Size Tier
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'small' as const, label: 'Small', scale: '0.8×', icon: '🟢' },
+                { id: 'medium' as const, label: 'Medium', scale: '1.0×', icon: '🟡' },
+                { id: 'large' as const, label: 'Large', scale: '1.25×', icon: '🟠' },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setBatchSize(s.id);
+                  }}
+                  className={`flex flex-col items-center justify-center p-2 rounded-xl border text-xs font-sans transition-all cursor-pointer ${
+                    batchSize === s.id
+                      ? 'bg-[#faeee8] border-[#cc5a35] text-[#8a3319] shadow-xs font-semibold'
+                      : 'bg-white border-[#e8e2d8] text-[#685f54] hover:bg-[#f5f1ea]'
+                  }`}
+                >
+                  <span className="text-sm mb-0.5">{s.icon}</span>
+                  <span className="font-medium">{s.label}</span>
+                  <span className="text-[10px] text-[#9e9488] font-mono">{s.scale}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Storage Location Switcher */}
         <div className="mb-5">

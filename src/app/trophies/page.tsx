@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
-import { Trophy, Flame, DollarSign, ChefHat, Sparkles, Download, Upload, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
+import { Trophy, Flame, DollarSign, ChefHat, Sparkles, Download, Upload, ArrowLeft, CheckCircle2, Clock, Trash2, ChevronDown, Check } from 'lucide-react';
 import { sound } from '@/lib/audio';
+import { CURRENCIES, getPreferredCurrency, setPreferredCurrency } from '@/lib/constants/currency';
 import Link from 'next/link';
 
 interface TrophyData {
@@ -36,6 +37,61 @@ export default function TrophiesPage() {
   const [recipesCooked, setRecipesCooked] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [restoreMessage, setRestoreMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Currency state
+  const [currency, setCurrency] = useState<string>('$');
+  const [showCurrencyDropdown, setShowCurrencyDropdown] = useState<boolean>(false);
+  const [confirmClearAll, setConfirmClearAll] = useState<boolean>(false);
+
+  useEffect(() => {
+    setCurrency(getPreferredCurrency());
+    const handleCurrencyChange = () => setCurrency(getPreferredCurrency());
+    window.addEventListener('justcook_currency_change', handleCurrencyChange);
+    return () => window.removeEventListener('justcook_currency_change', handleCurrencyChange);
+  }, []);
+
+  const handleSelectCurrency = (sym: string) => {
+    sound.playDing();
+    setPreferredCurrency(sym);
+    setCurrency(sym);
+    setShowCurrencyDropdown(false);
+  };
+
+  const handleDeleteSingleLog = async (id: string) => {
+    sound.playWoodTap();
+    try {
+      const res = await fetch(`/api/trophies?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setHistory((prev) => prev.filter((h) => h.id !== id));
+        loadTrophies();
+      }
+    } catch (err) {
+      console.error('Failed to delete log entry:', err);
+    }
+  };
+
+  const handleClearAllLogs = async () => {
+    if (!confirmClearAll) {
+      sound.playWoodTap();
+      setConfirmClearAll(true);
+      setTimeout(() => setConfirmClearAll(false), 4000);
+      return;
+    }
+
+    sound.playDing();
+    try {
+      const res = await fetch('/api/trophies?all=true', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setHistory([]);
+        setConfirmClearAll(false);
+        loadTrophies();
+      }
+    } catch (err) {
+      console.error('Failed to clear logs:', err);
+    }
+  };
 
   const loadTrophies = async () => {
     setIsLoading(true);
@@ -166,10 +222,42 @@ export default function TrophiesPage() {
             </span>
           </div>
 
-          <div className="bg-white rounded-2xl p-7 border border-[#e8e2d8] shadow-xs">
-            <span className="font-serif text-4xl sm:text-5xl font-normal text-[#cc5a35] block mb-1.5">
-              ${totalSaved.toFixed(2)}
-            </span>
+          <div className="bg-white rounded-2xl p-7 border border-[#e8e2d8] shadow-xs relative">
+            <div className="flex items-start justify-between mb-1.5">
+              <span className="font-serif text-4xl sm:text-5xl font-normal text-[#cc5a35] block">
+                {currency}{totalSaved.toFixed(2)}
+              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
+                  className="px-2.5 py-1 text-xs font-sans font-semibold rounded-lg bg-[#faf8f5] hover:bg-[#f0ebe1] border border-[#e8e2d8] text-[#685f54] flex items-center space-x-1 transition-all"
+                  title="Change Currency"
+                >
+                  <span>{currency} Currency</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {showCurrencyDropdown && (
+                  <div className="absolute right-0 top-8 z-50 bg-white border border-[#e8e2d8] rounded-xl shadow-xl p-1.5 w-48 max-h-60 overflow-y-auto space-y-1">
+                    {CURRENCIES.map((c) => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => handleSelectCurrency(c.symbol)}
+                        className={`w-full text-left px-2.5 py-1.5 text-xs font-sans rounded-lg flex items-center justify-between transition-colors ${
+                          currency === c.symbol
+                            ? 'bg-[#faeee8] text-[#cc5a35] font-semibold'
+                            : 'hover:bg-[#faf8f5] text-[#201b16]'
+                        }`}
+                      >
+                        <span>{c.name}</span>
+                        {currency === c.symbol && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <span className="text-base font-sans text-[#796f64]">
               Estimated Saved
             </span>
@@ -237,9 +325,26 @@ export default function TrophiesPage() {
 
         {/* Rescued Timeline History */}
         <div>
-          <div className="flex items-center space-x-2.5 mb-5">
-            <Clock className="w-6 h-6 text-[#cc5a35]" />
-            <h2 className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16]">Recent Rescued Food Log</h2>
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center space-x-2.5">
+              <Clock className="w-6 h-6 text-[#cc5a35]" />
+              <h2 className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16]">Recent Rescued Food Log</h2>
+            </div>
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAllLogs}
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-sans font-medium rounded-xl border transition-all ${
+                  confirmClearAll
+                    ? 'bg-[#cc5a35] text-white border-[#cc5a35]'
+                    : 'bg-white hover:bg-[#faeee8] text-[#8a3319] border-[#f0d9cf]'
+                }`}
+                title="Clear all rescued food logs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{confirmClearAll ? 'Confirm Clear All Logs?' : 'Clear Log History'}</span>
+              </button>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-[#e8e2d8] shadow-xs overflow-hidden">
@@ -265,13 +370,23 @@ export default function TrophiesPage() {
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-xs sm:text-sm font-sans font-medium text-[#2d5930] bg-[#edf5ee] border border-[#d2e7d3] px-3 py-1 rounded-lg block sm:inline">
-                        +{item.savedDaysBeforeExpiry ?? 1}d before expiry
-                      </span>
-                      <span className="text-xs sm:text-sm font-sans text-[#9e9488] block sm:inline sm:ml-3">
-                        {new Date(item.rescuedAt).toLocaleDateString()}
-                      </span>
+                    <div className="flex items-center space-x-3">
+                      <div className="text-right">
+                        <span className="text-xs sm:text-sm font-sans font-medium text-[#2d5930] bg-[#edf5ee] border border-[#d2e7d3] px-3 py-1 rounded-lg block sm:inline">
+                          +{item.savedDaysBeforeExpiry ?? 1}d before expiry
+                        </span>
+                        <span className="text-xs sm:text-sm font-sans text-[#9e9488] block sm:inline sm:ml-3">
+                          {new Date(item.rescuedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSingleLog(item.id)}
+                        className="p-2 rounded-lg text-[#b8ab99] hover:text-[#cc5a35] hover:bg-[#faeee8] transition-colors"
+                        title="Delete this log entry"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}

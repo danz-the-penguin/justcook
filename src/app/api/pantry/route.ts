@@ -16,6 +16,14 @@ export function getFreshnessStatus(expiresAt: Date): 'fresh' | 'use_soon' | 'cri
   return 'fresh';
 }
 
+export function extractBatchSize(notes?: string | null): 'small' | 'medium' | 'large' {
+  if (!notes) return 'medium';
+  const lower = notes.toLowerCase();
+  if (lower.includes('size:small') || lower.includes('small') || lower.includes('mini')) return 'small';
+  if (lower.includes('size:large') || lower.includes('large') || lower.includes('jumbo')) return 'large';
+  return 'medium';
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -60,6 +68,7 @@ export async function GET(request: Request) {
         freshnessStatus: itemFreshness,
         batches: activeBatches.map((b) => ({
           ...b,
+          size: extractBatchSize(b.notes),
           freshness: getFreshnessStatus(b.expiresAt),
           daysLeft: Math.ceil((b.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
         })),
@@ -76,7 +85,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { slug, location = 'fridge', quantity = 1, unit, obtainedAt, expiresAt, notes } = body;
+    const { slug, location = 'fridge', quantity = 1, unit, obtainedAt, expiresAt, notes, size } = body;
 
     let item = await prisma.pantryItem.findUnique({ where: { slug } });
     if (!item) {
@@ -99,6 +108,12 @@ export async function POST(request: Request) {
       ? new Date(expiresAt)
       : calculateExpiryDate(item.slug, item.category, location as StorageLocation, finalObtainedAt);
 
+    const finalSize = size || extractBatchSize(notes);
+    let finalNotes = notes || null;
+    if (finalSize && finalSize !== 'medium') {
+      finalNotes = finalNotes ? `${finalNotes} size:${finalSize}` : `size:${finalSize}`;
+    }
+
     const batch = await prisma.pantryItemBatch.create({
       data: {
         pantryItemId: item.id,
@@ -107,7 +122,7 @@ export async function POST(request: Request) {
         location,
         obtainedAt: finalObtainedAt,
         expiresAt: finalExpiresAt,
-        notes,
+        notes: finalNotes,
       },
     });
 
@@ -121,7 +136,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes } = body;
+    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize } = body;
 
     if (!batchId) {
       return NextResponse.json({ success: false, error: 'batchId is required' }, { status: 400 });
@@ -167,7 +182,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Relocation or date update
+    // Relocation, size, or date update
     const updateData: { location?: string; expiresAt?: Date; notes?: string } = {};
     if (newLocation && newLocation !== existingBatch.location) {
       updateData.location = newLocation;
@@ -184,6 +199,11 @@ export async function PATCH(request: Request) {
     }
     if (newNotes !== undefined) {
       updateData.notes = newNotes;
+    }
+    if (newSize) {
+      const baseNotes = (newNotes !== undefined ? newNotes : existingBatch.notes) || '';
+      const cleaned = baseNotes.replace(/size:\s*(small|medium|large)/gi, '').trim();
+      updateData.notes = newSize !== 'medium' ? (cleaned ? `${cleaned} size:${newSize}` : `size:${newSize}`) : (cleaned || undefined);
     }
 
     const updated = await prisma.pantryItemBatch.update({

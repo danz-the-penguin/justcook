@@ -43,6 +43,7 @@ interface ParsedBulkItem {
   unit: string;
   category: string;
   location: StorageLocation;
+  size: 'small' | 'medium' | 'large';
   selected: boolean;
 }
 
@@ -116,6 +117,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
   const [selectedSlug, setSelectedSlug] = useState<string>('egg');
   const [customName, setCustomName] = useState<string>('');
   const [customCategory, setCustomCategory] = useState<string>('pantry');
+  const [standardSize, setStandardSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [location, setLocation] = useState<StorageLocation>(
     activeLocation === 'all' || activeLocation === 'spice' ? 'fridge' : activeLocation
   );
@@ -123,6 +125,15 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
   const [unit, setUnit] = useState<string>('piece');
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCustomNameChange = (val: string) => {
+    setCustomName(val);
+    if (/\b(small|mini)\b/i.test(val)) {
+      setStandardSize('small');
+    } else if (/\b(large|jumbo)\b/i.test(val)) {
+      setStandardSize('large');
+    }
+  };
 
   // Upload Custom Asset state
   const [rawFile, setRawFile] = useState<File | null>(null);
@@ -354,6 +365,15 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
         rest = unitMatch[2].trim();
       }
 
+      let itemSize: 'small' | 'medium' | 'large' = 'medium';
+      const sizeMatch = rest.match(/\b(small|mini|large|jumbo|medium)\b/i);
+      if (sizeMatch) {
+        const matched = sizeMatch[1].toLowerCase();
+        if (matched === 'small' || matched === 'mini') itemSize = 'small';
+        if (matched === 'large' || matched === 'jumbo') itemSize = 'large';
+        rest = rest.replace(/\b(small|mini|large|jumbo|medium)\b/i, '').trim();
+      }
+
       rest = rest.replace(/^(of|in)\s+/i, '').trim();
       if (!rest) rest = 'Ingredient';
 
@@ -391,6 +411,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
         unit,
         category,
         location: loc,
+        size: itemSize,
         selected: true,
       });
     });
@@ -410,6 +431,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
         location: item.location,
         quantity: item.quantity,
         unit: item.unit,
+        size: item.size,
       });
     }
     setIsStockingBulk(false);
@@ -443,6 +465,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
       location,
       quantity: Number(quantity),
       unit,
+      size: standardSize,
       obtainedAt: new Date().toISOString(),
       expiresAt: expiryDate ? new Date(expiryDate).toISOString() : undefined,
     });
@@ -864,7 +887,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
                   type="text"
                   placeholder="e.g. Yee Mee, Oyster Sauce, Ginger, Dried Chillis..."
                   value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
+                  onChange={(e) => handleCustomNameChange(e.target.value)}
                   className="flex-1 px-3.5 py-2.5 bg-white border border-[#e8e2d8] rounded-xl text-sm font-sans font-medium text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
                 />
                 {customName.trim() && (
@@ -1039,6 +1062,38 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
               </div>
             </div>
 
+            {/* Physical Size Tier Switcher */}
+            <div>
+              <label className="block text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider mb-2">
+                Physical Size Tier
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'small' as const, label: 'Small', scale: '0.8×', icon: '🟢' },
+                  { id: 'medium' as const, label: 'Medium', scale: '1.0×', icon: '🟡' },
+                  { id: 'large' as const, label: 'Large', scale: '1.25×', icon: '🟠' },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      sound.playPop();
+                      setStandardSize(s.id);
+                    }}
+                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-xs font-sans transition-all cursor-pointer ${
+                      standardSize === s.id
+                        ? 'bg-[#faeee8] border-[#cc5a35] text-[#8a3319] shadow-xs font-semibold'
+                        : 'bg-white border-[#e8e2d8] text-[#685f54] hover:bg-[#f5f1ea]'
+                    }`}
+                  >
+                    <span className="text-sm mb-0.5">{s.icon}</span>
+                    <span className="font-medium">{s.label}</span>
+                    <span className="text-[10px] text-[#9e9488] font-mono">{s.scale}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Smart Auto-Filled Expiry Date */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -1142,6 +1197,15 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
                         <span className="font-sans font-medium text-xs sm:text-sm text-[#201b16] truncate">
                           {item.name}
                         </span>
+                        {item.size !== 'medium' && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              item.size === 'small' ? 'bg-[#edf5ee] text-[#2d5930]' : 'bg-[#faeee8] text-[#cc5a35]'
+                            }`}
+                          >
+                            {item.size.toUpperCase()}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center space-x-2 shrink-0 text-xs font-sans">
