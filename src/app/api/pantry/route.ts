@@ -44,6 +44,16 @@ export function extractBulbCloves(notes?: string | null): number {
   return 10;
 }
 
+export function extractPastaShape(notes?: string | null): string | undefined {
+  if (!notes) return undefined;
+  const match = notes.match(/shape:\s*([a-zA-Z0-9_\-\s]+?)(?=\s+(?:size|slices|cloves):|$)/i);
+  if (match && match[1]) {
+    const val = match[1].trim();
+    if (val) return val;
+  }
+  return undefined;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -91,6 +101,7 @@ export async function GET(request: Request) {
           size: extractBatchSize(b.notes),
           slicesPerLoaf: extractLoafSlices(b.notes),
           clovesPerBulb: extractBulbCloves(b.notes),
+          pastaShape: extractPastaShape(b.notes),
           freshness: getFreshnessStatus(b.expiresAt),
           daysLeft: Math.ceil((b.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
         })),
@@ -133,6 +144,7 @@ export async function POST(request: Request) {
     const finalSize = size || extractBatchSize(notes) || 'medium';
     const slicesCount = body.slicesPerLoaf || body.newSlices;
     const clovesCount = body.clovesPerBulb || body.newCloves;
+    const targetShape = body.pastaShape || body.shape;
     let finalNotes = notes || null;
     if (finalSize) {
       finalNotes = finalNotes ? `${finalNotes} size:${finalSize}` : `size:${finalSize}`;
@@ -142,6 +154,9 @@ export async function POST(request: Request) {
     }
     if (clovesCount && Number(clovesCount) > 0) {
       finalNotes = finalNotes ? `${finalNotes} cloves:${clovesCount}` : `cloves:${clovesCount}`;
+    }
+    if (targetShape && typeof targetShape === 'string' && targetShape.trim()) {
+      finalNotes = finalNotes ? `${finalNotes} shape:${targetShape.trim()}` : `shape:${targetShape.trim()}`;
     }
 
     const batch = await prisma.pantryItemBatch.create({
@@ -161,6 +176,7 @@ export async function POST(request: Request) {
       size: finalSize,
       slicesPerLoaf: slicesCount ? Number(slicesCount) : extractLoafSlices(batch.notes),
       clovesPerBulb: clovesCount ? Number(clovesCount) : extractBulbCloves(batch.notes),
+      pastaShape: targetShape ? targetShape.trim() : extractPastaShape(batch.notes),
       freshness: getFreshnessStatus(batch.expiresAt),
       daysLeft: Math.ceil((batch.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
     };
@@ -175,7 +191,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize, newSlices, slicesPerLoaf, newCloves, clovesPerBulb } = body;
+    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize, newSlices, slicesPerLoaf, newCloves, clovesPerBulb, pastaShape, newShape } = body;
 
     if (!batchId) {
       return NextResponse.json({ success: false, error: 'batchId is required' }, { status: 400 });
@@ -221,7 +237,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Relocation, size, slices, cloves, or date update
+    // Relocation, size, slices, cloves, shape, or date update
     const updateData: { location?: string; expiresAt?: Date; notes?: string } = {};
     if (newLocation && newLocation !== existingBatch.location) {
       updateData.location = newLocation;
@@ -237,10 +253,11 @@ export async function PATCH(request: Request) {
       updateData.expiresAt = new Date(newExpiresAt);
     }
     
-    // Notes, Size, SlicesPerLoaf, and ClovesPerBulb updates
+    // Notes, Size, SlicesPerLoaf, ClovesPerBulb, and PastaShape updates
     const targetSlices = newSlices !== undefined ? Number(newSlices) : slicesPerLoaf !== undefined ? Number(slicesPerLoaf) : undefined;
     const targetCloves = newCloves !== undefined ? Number(newCloves) : clovesPerBulb !== undefined ? Number(clovesPerBulb) : undefined;
-    if (newNotes !== undefined || newSize || targetSlices !== undefined || targetCloves !== undefined) {
+    const targetShape = pastaShape !== undefined ? pastaShape : newShape;
+    if (newNotes !== undefined || newSize || targetSlices !== undefined || targetCloves !== undefined || targetShape !== undefined) {
       let baseNotes = (newNotes !== undefined ? newNotes : existingBatch.notes) || '';
       if (newSize) {
         baseNotes = baseNotes.replace(/size:\s*(small|medium|large)/gi, '').trim();
@@ -258,6 +275,12 @@ export async function PATCH(request: Request) {
         baseNotes = baseNotes.replace(/cloves:\s*\d+/gi, '').trim();
         if (targetCloves > 0) {
           baseNotes = baseNotes ? `${baseNotes} cloves:${targetCloves}` : `cloves:${targetCloves}`;
+        }
+      }
+      if (targetShape !== undefined) {
+        baseNotes = baseNotes.replace(/shape:\s*[a-zA-Z0-9_\-\s]+?(?=\s+(?:size|slices|cloves):|$)/gi, '').trim();
+        if (targetShape && typeof targetShape === 'string' && targetShape.trim()) {
+          baseNotes = baseNotes ? `${baseNotes} shape:${targetShape.trim()}` : `shape:${targetShape.trim()}`;
         }
       }
       updateData.notes = baseNotes || undefined;

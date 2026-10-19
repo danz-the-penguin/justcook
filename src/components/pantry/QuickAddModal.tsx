@@ -220,7 +220,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
     { slug: 'garlic', name: 'Garlic', category: 'produce', defaultUnit: 'bulb', pngAsset: '/assets/food/garlic.png' },
     { slug: 'onion', name: 'Yellow Onion', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/onion.png' },
     { slug: 'chicken', name: 'Chicken Breast', category: 'meat', defaultUnit: 'g', pngAsset: '/assets/food/chicken.png' },
-    { slug: 'pasta', name: 'Penne Pasta', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/pasta.png' },
+    { slug: 'pasta', name: 'Pasta', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/pasta.png' },
     { slug: 'yee_mee', name: 'Yee Mee', category: 'pantry', defaultUnit: 'piece', pngAsset: '/assets/food/yeemee.png' },
     { slug: 'rice', name: 'Jasmine Rice', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/rice.png' },
     { slug: 'bread', name: 'Artisan Bread', category: 'pantry', defaultUnit: 'slice', pngAsset: '/assets/food/bread.png' },

@@ -10,6 +10,7 @@ import {
   isSpiceOrJarItem,
   snapToCulinaryFraction,
   formatQuantityWithCulinaryFraction,
+  getPastaShapeEmoji,
 } from '@/lib/constants/shelf-life';
 import { Plus, Minus, Calendar, Trash2, ArrowRightLeft, Pencil, MoreHorizontal, Utensils } from 'lucide-react';
 import { sound } from '@/lib/audio';
@@ -35,6 +36,14 @@ const BREAD_STEPS = [
   { label: '2 slices', val: 2 },
   { label: '¼ slice', val: 0.25 },
   { label: '4 slices', val: 4 },
+];
+
+const PASTA_STEPS_GRAMS = [
+  { label: '50g', val: 50 },
+  { label: '100g (1 serving)', val: 100 },
+  { label: '200g (2 servings)', val: 200 },
+  { label: '250g (½ pack)', val: 250 },
+  { label: '500g (1 pack)', val: 500 },
 ];
 
 const SPICE_STEPS_GRAMS = [
@@ -104,6 +113,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     item.name.toLowerCase().includes('garlic') ||
     ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unit.toLowerCase());
 
+  const isPasta =
+    item.slug === 'pasta' ||
+    item.name.toLowerCase().includes('pasta');
+
   const isComposite = isBread || isGarlic;
   const compositeType = isGarlic ? 'garlic' : 'bread';
   const compositeUnitSingular = isGarlic ? 'Bulb' : 'Loaf';
@@ -158,6 +171,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
   const availableSteps = isComposite
     ? dynamicCompositeSteps
+    : isPasta
+    ? PASTA_STEPS_GRAMS
     : isSpice && isGrams
     ? SPICE_STEPS_GRAMS
     : isSpice && isMl
@@ -227,18 +242,30 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     for (let i = 0; i < jarsToShow; i++) {
       let jarLabel = '';
       let jarQty = totalQty;
+      const currentBatch = displayedBatches[i] || (focusedBatch ? focusedBatch : primaryBatch);
+      const batchShape = currentBatch?.pastaShape;
+      const shapeEmoji = getPastaShapeEmoji(batchShape);
+
       if (jarCount === 1) {
         const q = focusedBatch ? focusedBatch.quantity : totalQty;
-        jarLabel = `1 Jar • ${formatQuantityWithCulinaryFraction(q).display} ${unit}`;
+        if (isPasta) {
+          jarLabel = `${shapeEmoji} ${batchShape || 'Pasta'} • ${formatQuantityWithCulinaryFraction(q).display}g`;
+        } else {
+          jarLabel = `1 Jar • ${formatQuantityWithCulinaryFraction(q).display} ${unit}`;
+        }
       } else {
         const batchQty = displayedBatches[i]?.quantity;
         jarQty = batchQty !== undefined ? batchQty : totalQty / jarCount;
         const qtyDisplay = formatQuantityWithCulinaryFraction(jarQty).display;
-        jarLabel = `Jar ${i + 1} • ${qtyDisplay} ${unit}`;
+        if (isPasta) {
+          jarLabel = `${shapeEmoji} ${batchShape || 'Pasta'} • ${qtyDisplay}g`;
+        } else {
+          jarLabel = `Jar ${i + 1} • ${qtyDisplay} ${unit}`;
+        }
       }
 
       // Compute dynamic liquid / powder fill level
-      const nominalCap = isGrams ? 100 : isMl ? 250 : 10;
+      const nominalCap = isPasta ? 500 : isGrams ? 100 : isMl ? 250 : 10;
       const fillPercent = Math.min(100, Math.max(12, Math.round((jarQty / nominalCap) * 100)));
       const fillStatus =
         fillPercent >= 85 ? 'Full' : fillPercent >= 60 ? '¾' : fillPercent >= 40 ? '½' : fillPercent >= 25 ? '¼' : 'Low';
@@ -512,8 +539,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
   const handleAddNewBatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : isGarlic ? 'counter' : 'fridge');
-    const defaultQty = isSpice ? (isGrams ? 50 : 1) : 1;
+    const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice || isPasta ? 'pantry' : isGarlic ? 'counter' : 'fridge');
+    const defaultQty = isPasta ? 500 : isSpice ? (isGrams ? 50 : 1) : 1;
     await addNewItemBatch({
       slug: item.slug,
       name: item.name,
@@ -521,6 +548,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       location: loc,
       quantity: defaultQty,
       unit: item.defaultUnit,
+      pastaShape: isPasta ? (primaryBatch?.pastaShape || 'Spaghetti') : undefined,
       slicesPerLoaf: isBread ? getCompositeCapacity(primaryBatch) : undefined,
       clovesPerBulb: isGarlic ? getCompositeCapacity(primaryBatch) : undefined,
     });
@@ -656,7 +684,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
           className="relative min-h-[170px] sm:min-h-[200px] bg-[#faf8f5] border border-[#e5dec9] rounded-2xl p-3 sm:p-4 flex flex-col justify-between transition-colors group-hover:border-[#cc5a35]/40 touch-pan-y"
         >
           {/* Artisanal Segmented Group Filter Tabs */}
-          {hasMultipleBatches && !isSpice && (
+          {hasMultipleBatches && (!isSpice || isPasta) && (
             <div
               onClick={(e) => e.stopPropagation()}
               className="w-full flex items-center justify-between gap-1.5 pb-2 mb-2 border-b border-[#efeae1]/80 overflow-x-auto no-scrollbar z-20"
@@ -675,7 +703,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       : 'bg-white hover:bg-[#f2ede4] text-[#685f54] border border-[#e5dec9]'
                   }`}
                 >
-                  All ({isComposite ? `${totalCompositeUnits} ${totalCompositeUnits === 1 ? compositeUnitSingular.toLowerCase() : compositeUnitPlural.toLowerCase()}` : formatQuantityWithCulinaryFraction(totalQty).display})
+                  All ({isPasta ? `${totalQty}g` : isComposite ? `${totalCompositeUnits} ${totalCompositeUnits === 1 ? compositeUnitSingular.toLowerCase() : compositeUnitPlural.toLowerCase()}` : formatQuantityWithCulinaryFraction(totalQty).display})
                 </button>
 
                 {/* Individual Group Tabs */}
@@ -685,7 +713,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   const isUrgent = days <= 1;
                   const isSoon = days <= 3 && !isUrgent;
                   const cap = getCompositeCapacity(b);
-                  const sizeName = isGarlic
+                  const shapeName = b.pastaShape || 'Pasta';
+                  const sizeName = isPasta
+                    ? `${getPastaShapeEmoji(b.pastaShape)} ${shapeName}`
+                    : isGarlic
                     ? `Bulb ${idx + 1}`
                     : isBread
                     ? `Loaf ${idx + 1}`
@@ -705,11 +736,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           ? 'bg-[#cc5a35] text-white font-medium shadow-2xs'
                           : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border border-[#e5dec9]'
                       }`}
-                      title={isComposite ? `${sizeName}: ${cap} ${subUnitPlural} capacity • ${days}d left` : `${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
+                      title={isPasta ? `${shapeName}: ${b.quantity}g • ${days}d left` : isComposite ? `${sizeName}: ${cap} ${subUnitPlural} capacity • ${days}d left` : `${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
                     >
                       <span>{sizeName}</span>
                       <span className="font-mono text-[11px] opacity-85">
-                        {isComposite ? `${cap} ${isGarlic ? 'cl' : 'sl'}` : formatQuantityWithCulinaryFraction(b.quantity).display}
+                        {isPasta ? `${b.quantity}g` : isComposite ? `${cap} ${isGarlic ? 'cl' : 'sl'}` : formatQuantityWithCulinaryFraction(b.quantity).display}
                       </span>
                       {isUrgent ? (
                         <span className="text-[10px] font-bold text-red-500">🚨 1d</span>
@@ -726,7 +757,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 type="button"
                 onClick={() => setIsAddGroupModalOpen(true)}
                 className="w-7 h-7 rounded-xl bg-white hover:bg-[#faeee8] text-[#cc5a35] hover:text-[#9e3a19] border border-dashed border-[#cc5a35]/50 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs"
-                title="Add another group with chosen size, slices, cloves, or expiry date"
+                title="Add another group with chosen size, slices, cloves, shape, or expiry date"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -749,12 +780,16 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   <div className="flex items-center space-x-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
                     <span className="font-serif font-medium text-[#201b16] capitalize">
-                      {isComposite
+                      {isPasta
+                        ? `${getPastaShapeEmoji(focusedBatch.pastaShape)} ${focusedBatch.pastaShape || 'Pasta'} Group:`
+                        : isComposite
                         ? `${compositeUnitSingular} ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'}):`
                         : `${focusedBatch.size || 'medium'} Group:`}
                     </span>
                     <span className="font-mono font-bold text-[#cc5a35]">
-                      {isComposite
+                      {isPasta
+                        ? `${focusedBatch.quantity}g`
+                        : isComposite
                         ? `${formatQuantityWithCulinaryFraction(getSubUnits(focusedBatch.quantity, focusedBatch.unit, getCompositeCapacity(focusedBatch))).display}/${getCompositeCapacity(focusedBatch)} ${subUnitPlural}`
                         : `${formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} ${unit}`}
                     </span>
@@ -765,11 +800,13 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       type="button"
                       onClick={() => onEditBatch(focusedBatch, item)}
                       className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
-                      title={isComposite ? `Edit ${subUnitPlural} for this ${compositeUnitSingular.toLowerCase()}, expiry date, or size` : "Edit expiry date or size"}
+                      title={isPasta ? "Edit pasta shape, quantity, or expiry date" : isComposite ? `Edit ${subUnitPlural} for this ${compositeUnitSingular.toLowerCase()}, expiry date, or size` : "Edit expiry date or size"}
                     >
                       <Pencil className="w-3 h-3 text-[#cc5a35]" />
                       <span>
-                        {isComposite
+                        {isPasta
+                          ? `Edit Shape (${focusedBatch.pastaShape || 'Pasta'})`
+                          : isComposite
                           ? `Edit ${isGarlic ? 'Cloves' : 'Slices'} (${getCompositeCapacity(focusedBatch)})`
                           : focusedBatch.daysLeft !== undefined
                           ? focusedBatch.daysLeft <= 0
@@ -1160,9 +1197,15 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
             </div>
           ) : (
             !isComposite && hasMultipleBatches && (
-              <span className="text-[11px] font-sans text-[#8c8276]">
-                {activeBatches.length} groups on shelf
-              </span>
+              isPasta ? (
+                <span className="text-[11px] font-sans text-[#8c8276] truncate max-w-[200px]" title={Array.from(new Set(activeBatches.map(b => `${getPastaShapeEmoji(b.pastaShape)} ${b.pastaShape || 'Pasta'}`))).join(', ')}>
+                  Shapes: {Array.from(new Set(activeBatches.map(b => `${getPastaShapeEmoji(b.pastaShape)} ${b.pastaShape || 'Pasta'}`))).join(', ')}
+                </span>
+              ) : (
+                <span className="text-[11px] font-sans text-[#8c8276]">
+                  {activeBatches.length} groups on shelf
+                </span>
+              )
             )
           )}
         </div>

@@ -34,6 +34,7 @@ export const SHELF_LIFE_PRESETS: Record<
   bacon: { fridge: 14, freezer: 90, pantry: 0, counter: 0 },
 
   rice: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
+  pasta: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
   penne: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
   flour: { fridge: 180, freezer: 365, pantry: 240, counter: 180 },
   bread: { fridge: 7, freezer: 90, pantry: 5, counter: 4 },
@@ -101,7 +102,7 @@ export const KNOWN_FOOD_SLUGS = new Set([
   "milk",
   "olive_oil",
   "onion",
-  "penne",
+  "pasta",
   "potato",
   "rice",
   "salt",
@@ -161,7 +162,7 @@ export function resolveFoodAsset(
   }
   // Smart culinary family mappings for custom / Asian / global ingredients
   if (
-    /(noodle|ramen|spaghetti|macaroni|udon|vermicelli|fettuccine)/.test(
+    /(noodle|ramen|spaghetti|macaroni|udon|vermicelli|fettuccine|penne|fusilli|rigatoni|farfalle|linguine|pasta)/.test(
       normalized,
     )
   ) {
@@ -362,4 +363,27 @@ export function isSpiceOrJarItem(
     return true;
   }
   return false;
+}
+
+export interface PastaShapeInfo {
+  name: string;
+  emoji: string;
+  description?: string;
+}
+
+export const COMMON_PASTA_SHAPES: PastaShapeInfo[] = [
+  { name: 'Spaghetti', emoji: '🍝' },
+  { name: 'Penne', emoji: '🥢' },
+  { name: 'Fusilli', emoji: '🌀' },
+  { name: 'Macaroni', emoji: '🥟' },
+  { name: 'Fettuccine', emoji: '🎗️' },
+  { name: 'Farfalle', emoji: '🎀' },
+  { name: 'Rigatoni', emoji: '🥫' },
+  { name: 'Linguine', emoji: '🍜' },
+];
+
+export function getPastaShapeEmoji(shape?: string): string {
+  if (!shape) return '🍝';
+  const match = COMMON_PASTA_SHAPES.find((s) => s.name.toLowerCase() === shape.toLowerCase());
+  return match ? match.emoji : '🍝';
 }

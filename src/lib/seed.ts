@@ -118,10 +118,10 @@ export async function seedDatabase() {
     },
     {
       slug: "pasta",
-      name: "Penne Pasta",
+      name: "Pasta",
       category: "pantry",
       defaultUnit: "g",
-      pngAsset: "/assets/food/penne.png",
+      pngAsset: "/assets/food/pasta.png",
       displayLimit: 6,
     },
     {
@@ -257,6 +257,7 @@ export async function seedDatabase() {
       location: "pantry",
       obtainedAt: now,
       expiresAt: daysFromNow(300),
+      notes: "shape:Spaghetti",
     },
     {
       slug: "rice",
@@ -540,7 +541,7 @@ export async function seedDatabase() {
       ingredients: [
         {
           name: "pasta",
-          rawText: "200g penne pasta",
+          rawText: "200g pasta (spaghetti, penne, or any shape)",
           amount: 200,
           unit: "g",
           category: "pantry",

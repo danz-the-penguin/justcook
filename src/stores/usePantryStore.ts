@@ -14,6 +14,7 @@ export interface PantryBatchData {
   size?: 'small' | 'medium' | 'large';
   slicesPerLoaf?: number;
   clovesPerBulb?: number;
+  pastaShape?: string;
   freshness: 'fresh' | 'use_soon' | 'critical' | 'expired';
   daysLeft: number;
 }
@@ -41,6 +42,7 @@ export interface PrepItem {
   amount: number;
   unit: string;
   size?: 'small' | 'medium' | 'large';
+  pastaShape?: string;
   batchId?: string;
   droppedAt: number;
 }
@@ -76,6 +78,7 @@ interface PantryStore {
   moveBatchLocation: (batchId: string, newLocation: StorageLocation) => Promise<void>;
   updateBatchDates: (batchId: string, expiresAt: string) => Promise<void>;
   updateBatchSlices: (batchId: string, slicesPerLoaf: number) => Promise<void>;
+  updateBatchShape: (batchId: string, pastaShape: string) => Promise<void>;
   addNewItemBatch: (payload: {
     slug: string;
     name?: string;
@@ -86,6 +89,7 @@ interface PantryStore {
     size?: 'small' | 'medium' | 'large';
     slicesPerLoaf?: number;
     clovesPerBulb?: number;
+    pastaShape?: string;
     obtainedAt?: string;
     expiresAt?: string;
     notes?: string;
@@ -138,10 +142,12 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       get().decrementBatch(targetBatch.id, deductAmt);
     }
 
-    // Add to prep board - keep distinct size tiers separate!
+    // Add to prep board - keep distinct size tiers and pasta shapes separate!
+    const pastaShape = targetBatch?.pastaShape;
+    const isPasta = item.slug === 'pasta' || item.name.toLowerCase().includes('pasta');
     const currentPrep = get().prepItems;
     const existing = currentPrep.find(
-      (p) => p.slug === item.slug && (p.size || 'medium') === itemSize
+      (p) => p.slug === item.slug && (p.size || 'medium') === itemSize && (!isPasta || p.pastaShape === pastaShape)
     );
 
     let nextPrep: PrepItem[];
@@ -155,13 +161,14 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       nextPrep = [
         ...currentPrep,
         {
-          id: `${item.slug}-${itemSize}-${Date.now()}`,
+          id: `${item.slug}-${isPasta && pastaShape ? pastaShape : itemSize}-${Date.now()}`,
           slug: item.slug,
-          name: item.name,
+          name: isPasta && pastaShape ? `${item.name} (${pastaShape})` : item.name,
           category: item.category,
           amount: amount,
           unit: item.slug === 'bread' ? 'slice' : (item.slug === 'garlic' || item.name.toLowerCase().includes('garlic')) ? 'clove' : item.defaultUnit,
           size: itemSize,
+          pastaShape: isPasta ? pastaShape : undefined,
           batchId: targetBatch?.id,
           droppedAt: Date.now(),
         },
@@ -515,6 +522,20 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       await get().fetchPantry();
     } catch (e) {
       console.error('Failed to update batch slices:', e);
+    }
+  },
+
+  updateBatchShape: async (batchId, pastaShape) => {
+    sound.playPop();
+    try {
+      await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, pastaShape }),
+      });
+      await get().fetchPantry();
+    } catch (e) {
+      console.error('Failed to update batch shape:', e);
     }
   },
 

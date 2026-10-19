@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { EnrichedPantryItem, usePantryStore } from '@/stores/usePantryStore';
-import { StorageLocation, isSpiceOrJarItem, calculateExpiryDate } from '@/lib/constants/shelf-life';
+import { StorageLocation, isSpiceOrJarItem, calculateExpiryDate, COMMON_PASTA_SHAPES, getPastaShapeEmoji } from '@/lib/constants/shelf-life';
 import { X, Plus, Minus, Check } from 'lucide-react';
 import { sound } from '@/lib/audio';
 
@@ -32,9 +32,13 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     item.name.toLowerCase().includes('garlic') ||
     ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unitLower);
 
+  const isPasta =
+    item.slug === 'pasta' ||
+    item.name.toLowerCase().includes('pasta');
+
   const defaultLoc: StorageLocation = primaryBatch
     ? primaryBatch.location
-    : isSpice || isBread
+    : isSpice || isBread || isPasta
     ? 'pantry'
     : isGarlic
     ? 'counter'
@@ -42,7 +46,8 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
 
   const [location, setLocation] = useState<StorageLocation>(defaultLoc);
   const [sizeTier, setSizeTier] = useState<'small' | 'medium' | 'large'>('medium');
-  const [quantity, setQuantity] = useState<number>(isSpice ? (isGrams ? 50 : isMl ? 100 : 1) : 1);
+  const [pastaShape, setPastaShape] = useState<string>('Spaghetti');
+  const [quantity, setQuantity] = useState<number>(isPasta ? 500 : isSpice ? (isGrams ? 50 : isMl ? 100 : 1) : 1);
   const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(primaryBatch?.slicesPerLoaf || 8);
   const [clovesPerBulb, setClovesPerBulb] = useState<number>(primaryBatch?.clovesPerBulb || primaryBatch?.slicesPerLoaf || 10);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,7 +78,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     sound.playPop();
 
     try {
-      const finalUnit = isBread ? 'loaf' : isGarlic ? 'bulb' : item.defaultUnit;
+      const finalUnit = isPasta ? 'g' : isBread ? 'loaf' : isGarlic ? 'bulb' : item.defaultUnit;
       const finalQuantity = Math.max(1, quantity);
 
       const newBatch = await addNewItemBatch({
@@ -84,11 +89,12 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
         quantity: finalQuantity,
         unit: finalUnit,
         size: sizeTier,
+        pastaShape: isPasta ? pastaShape : undefined,
         slicesPerLoaf: isBread ? slicesPerLoaf : undefined,
         clovesPerBulb: isGarlic ? clovesPerBulb : undefined,
         obtainedAt: new Date().toISOString(),
         expiresAt: expiryDate ? new Date(expiryDate).toISOString() : undefined,
-        notes: `size:${sizeTier}${isBread ? ` slices:${slicesPerLoaf}` : isGarlic ? ` cloves:${clovesPerBulb}` : ''}`,
+        notes: `size:${sizeTier}${isBread ? ` slices:${slicesPerLoaf}` : isGarlic ? ` cloves:${clovesPerBulb}` : ''}${isPasta && pastaShape ? ` shape:${pastaShape}` : ''}`,
       });
 
       setIsSubmitting(false);
@@ -138,8 +144,61 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-          {/* 1. Physical Size Selector (for non-spices) */}
-          {!isSpice && (
+          {/* 1. Pasta Shape Selector (if pasta) */}
+          {isPasta && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
+                  Pasta Shape for New Group
+                </label>
+                <span className="text-xs font-mono font-bold text-[#cc5a35] bg-[#faeee8] px-2.5 py-0.5 rounded-full border border-[#f0d9cf] flex items-center space-x-1">
+                  <span>{getPastaShapeEmoji(pastaShape)}</span>
+                  <span>{pastaShape}</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 mb-2.5">
+                {COMMON_PASTA_SHAPES.map((shape) => {
+                  const isSelected = pastaShape.toLowerCase() === shape.name.toLowerCase();
+                  return (
+                    <button
+                      key={shape.name}
+                      type="button"
+                      onClick={() => {
+                        sound.triggerHaptic('light');
+                        sound.playWoodTap();
+                        setPastaShape(shape.name);
+                      }}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl border text-xs font-sans transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#faeee8] border-[#cc5a35] text-[#8a3319] shadow-xs font-semibold ring-2 ring-[#cc5a35]/30'
+                          : 'bg-white border-[#e8e2d8] text-[#685f54] hover:bg-[#f5f1ea]'
+                      }`}
+                    >
+                      <span className="text-lg mb-0.5">{shape.emoji}</span>
+                      <span className="font-medium text-xs text-[#201b16] truncate max-w-full">{shape.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-[#796f64] shrink-0 font-sans">Custom Shape:</span>
+                <input
+                  type="text"
+                  placeholder="e.g. Orecchiette, Tagliatelle, Orzo"
+                  value={COMMON_PASTA_SHAPES.some((s) => s.name.toLowerCase() === pastaShape.toLowerCase()) ? '' : pastaShape}
+                  onChange={(e) => {
+                    if (e.target.value.trim()) {
+                      setPastaShape(e.target.value);
+                    }
+                  }}
+                  className="flex-1 px-3 py-1.5 bg-white border border-[#e8e2d8] rounded-xl text-xs font-sans font-medium text-[#201b16] placeholder:text-[#b5ab9e] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 1b. Physical Size Selector (for non-spices and non-pasta) */}
+          {!isSpice && !isPasta && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
@@ -181,52 +240,113 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
             </div>
           )}
 
-          {/* 2. Quantity Selector - Defaults strictly to 1 asset */}
+          {/* 2. Quantity Selector */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
-                Asset Quantity to Add
+                {isPasta ? 'Net Weight to Add' : 'Asset Quantity to Add'}
               </label>
               <span className="text-xs font-sans font-medium text-[#201b16] bg-[#faeee8] px-2.5 py-0.5 rounded-full border border-[#f0d9cf]">
-                {quantity} {isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : (item.defaultUnit || 'piece')}
+                {quantity} {isPasta ? 'g' : isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : (item.defaultUnit || 'piece')}
               </span>
             </div>
 
-            <div className="flex items-center space-x-3 bg-white border border-[#e8e2d8] rounded-2xl p-2">
-              <button
-                type="button"
-                onClick={() => {
-                  sound.triggerHaptic('light');
-                  setQuantity((q) => Math.max(1, q - 1));
-                }}
-                disabled={quantity <= 1}
-                className="w-10 h-10 rounded-xl bg-[#faf8f5] hover:bg-[#f0ebe1] disabled:opacity-30 text-[#201b16] flex items-center justify-center transition-all cursor-pointer"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
+            {isPasta ? (
+              <div className="space-y-2">
+                <div className="flex items-center space-x-3 bg-white border border-[#e8e2d8] rounded-2xl p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.triggerHaptic('light');
+                      setQuantity((q) => Math.max(25, q - 50));
+                    }}
+                    disabled={quantity <= 25}
+                    className="w-12 h-10 rounded-xl bg-[#faf8f5] hover:bg-[#f0ebe1] disabled:opacity-30 text-[#201b16] flex items-center justify-center transition-all cursor-pointer font-bold text-xs"
+                  >
+                    -50g
+                  </button>
 
-              <div className="flex-1 text-center">
-                <span className="font-serif text-2xl font-bold text-[#201b16] tabular-nums">
-                  {quantity}
-                </span>
-                <span className="text-xs text-[#796f64] ml-1.5 font-sans">
-                  {isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : 'Asset'}
-                </span>
+                  <div className="flex-1 text-center flex items-center justify-center space-x-1">
+                    <input
+                      type="number"
+                      min="1"
+                      step="25"
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-24 text-center font-serif text-2xl font-bold text-[#201b16] tabular-nums bg-transparent focus:outline-none"
+                    />
+                    <span className="text-xs text-[#796f64] font-sans">grams</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.triggerHaptic('light');
+                      setQuantity((q) => q + 50);
+                    }}
+                    className="w-12 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] text-white flex items-center justify-center transition-all cursor-pointer shadow-xs font-bold text-xs"
+                  >
+                    +50g
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5 no-scrollbar">
+                  {[250, 400, 500, 750, 1000].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => {
+                        sound.triggerHaptic('light');
+                        setQuantity(g);
+                      }}
+                      className={`px-2.5 py-1 text-xs font-sans rounded-lg border transition-all cursor-pointer shrink-0 ${
+                        quantity === g
+                          ? 'bg-[#cc5a35] text-white border-[#cc5a35] font-semibold shadow-2xs'
+                          : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border-[#e8e2d8]'
+                      }`}
+                    >
+                      {g >= 1000 ? `${g / 1000}kg` : `${g}g`}
+                    </button>
+                  ))}
+                </div>
               </div>
+            ) : (
+              <div className="flex items-center space-x-3 bg-white border border-[#e8e2d8] rounded-2xl p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.triggerHaptic('light');
+                    setQuantity((q) => Math.max(1, q - 1));
+                  }}
+                  disabled={quantity <= 1}
+                  className="w-10 h-10 rounded-xl bg-[#faf8f5] hover:bg-[#f0ebe1] disabled:opacity-30 text-[#201b16] flex items-center justify-center transition-all cursor-pointer"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  sound.triggerHaptic('light');
-                  setQuantity((q) => q + 1);
-                }}
-                className="w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] text-white flex items-center justify-center transition-all cursor-pointer shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+                <div className="flex-1 text-center">
+                  <span className="font-serif text-2xl font-bold text-[#201b16] tabular-nums">
+                    {quantity}
+                  </span>
+                  <span className="text-xs text-[#796f64] ml-1.5 font-sans">
+                    {isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : 'Asset'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.triggerHaptic('light');
+                    setQuantity((q) => q + 1);
+                  }}
+                  className="w-10 h-10 rounded-xl bg-[#cc5a35] hover:bg-[#b54926] text-white flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <p className="text-[11px] text-[#8c8276] mt-1.5">
-              Default is strictly 1 asset. Each {isGarlic ? 'bulb' : isBread ? 'loaf' : 'produce item'} is created individually.
+              {isPasta ? 'Add an individual pasta pack or box with specified shape.' : `Default is strictly 1 asset. Each ${isGarlic ? 'bulb' : isBread ? 'loaf' : 'produce item'} is created individually.`}
             </p>
           </div>
 
@@ -410,6 +530,8 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
               <span>
                 {isSubmitting
                   ? 'Adding Group...'
+                  : isPasta
+                  ? `Add ${pastaShape} Group (${quantity}g)`
                   : `Add 1 ${sizeTier.charAt(0).toUpperCase() + sizeTier.slice(1)} ${isBread ? 'Loaf' : isGarlic ? 'Bulb' : 'Group'}`}
               </span>
             </button>

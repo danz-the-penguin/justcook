@@ -8,6 +8,8 @@ import {
   isSpiceOrJarItem,
   snapToCulinaryFraction,
   formatQuantityWithCulinaryFraction,
+  COMMON_PASTA_SHAPES,
+  getPastaShapeEmoji,
 } from '@/lib/constants/shelf-life';
 import { X, Trash2, Check, Pencil } from 'lucide-react';
 
@@ -19,7 +21,7 @@ interface BatchAdjustModalProps {
 }
 
 export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: BatchAdjustModalProps) {
-  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize, updateBatchSlices, addNewItemBatch } = usePantryStore();
+  const { updateBatchDates, moveBatchLocation, deleteBatch, updateBatchQuantity, updateBatchSize, updateBatchSlices, updateBatchShape, addNewItemBatch } = usePantryStore();
 
   // All React hooks MUST be at the top level unconditionally
   const [expiryDate, setExpiryDate] = useState<string>(
@@ -28,6 +30,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
   const [location, setLocation] = useState<StorageLocation>(batch?.location || 'fridge');
   const [quantity, setQuantity] = useState<number>(batch?.quantity || 1);
   const [batchSize, setBatchSize] = useState<'small' | 'medium' | 'large'>(batch?.size || 'medium');
+  const [pastaShape, setPastaShape] = useState<string>(batch?.pastaShape || 'Spaghetti');
   const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(batch?.slicesPerLoaf || 8);
   const [clovesPerBulb, setClovesPerBulb] = useState<number>(batch?.clovesPerBulb || batch?.slicesPerLoaf || 10);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,6 +43,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
       setLocation(batch.location);
       setQuantity(batch.quantity);
       setBatchSize(batch.size || 'medium');
+      setPastaShape(batch.pastaShape || 'Spaghetti');
       setSlicesPerLoaf(batch.slicesPerLoaf || 8);
       setClovesPerBulb(batch.clovesPerBulb || batch.slicesPerLoaf || 10);
       setConfirmDelete(false);
@@ -75,6 +79,28 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unitLower);
 
   const isBulbUnit = ['bulb', 'bulbs', 'head', 'heads'].includes(unitLower);
+
+  const isPasta =
+    item.slug === 'pasta' ||
+    item.name.toLowerCase().includes('pasta');
+
+  const pastaGramPresets = [
+    { label: '100g', val: 100 },
+    { label: '200g', val: 200 },
+    { label: '250g', val: 250 },
+    { label: '500g', val: 500 },
+    { label: '750g', val: 750 },
+    { label: '1kg', val: 1000 },
+  ];
+
+  const pastaGramDeltas = [
+    { label: '+50g', delta: 50 },
+    { label: '-50g', delta: -50 },
+    { label: '+100g', delta: 100 },
+    { label: '-100g', delta: -100 },
+    { label: '+250g', delta: 250 },
+    { label: '-250g', delta: -250 },
+  ];
 
   const spiceGramPresets = [
     { label: '10g', val: 10 },
@@ -206,7 +232,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     { label: '-1', delta: -1 },
   ];
 
-  const quickPresets = isGarlic
+  const quickPresets = isPasta
+    ? pastaGramPresets
+    : isGarlic
     ? (isBulbUnit ? garlicBulbPresets : garlicClovePresets)
     : isBread
     ? (isLoafUnit ? breadLoafPresets : breadSlicePresets)
@@ -216,7 +244,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     ? spiceMlPresets
     : producePresets;
 
-  const quickDeltas = isGarlic
+  const quickDeltas = isPasta
+    ? pastaGramDeltas
+    : isGarlic
     ? (isBulbUnit ? garlicBulbDeltas : garlicCloveDeltas)
     : isBread
     ? (isLoafUnit ? breadLoafDeltas : breadSliceDeltas)
@@ -237,13 +267,16 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     if (batchSize !== (batch.size || 'medium')) {
       await updateBatchSize(batch.id, batchSize);
     }
+    if (isPasta && pastaShape !== (batch.pastaShape || 'Spaghetti')) {
+      await updateBatchShape(batch.id, pastaShape);
+    }
     if (isBread && slicesPerLoaf !== (batch.slicesPerLoaf || 8)) {
       await updateBatchSlices(batch.id, slicesPerLoaf);
     }
     if (isGarlic && clovesPerBulb !== (batch.clovesPerBulb || 10)) {
       await updateBatchSlices(batch.id, clovesPerBulb);
     }
-    const finalQuantity = isSpice ? quantity : snapToCulinaryFraction(quantity);
+    const finalQuantity = isSpice || isPasta ? quantity : snapToCulinaryFraction(quantity);
     if (finalQuantity !== batch.quantity) {
       await updateBatchQuantity(batch.id, finalQuantity);
     }
@@ -311,7 +344,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
               Stock Quantity ({batch.unit})
             </label>
             <span className="text-xs font-sans font-medium text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
-              Visual: {isGarlic
+              Visual: {isPasta
+                ? `${quantity}g (${getPastaShapeEmoji(pastaShape)} ${pastaShape})`
+                : isGarlic
                 ? isBulbUnit
                   ? `${formatQuantityWithCulinaryFraction(quantity).display} bulb (${snapToCulinaryFraction(quantity * clovesPerBulb)} cloves)`
                   : `${formatQuantityWithCulinaryFraction(quantity).display} cloves (${(quantity / clovesPerBulb).toFixed(1)} bulb)`
@@ -326,7 +361,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
           <div className="flex items-center space-x-2 mb-2.5">
             <input
               type="number"
-              step={isSpice && (isGrams || isMl) ? '1' : '0.025'}
+              step={isSpice && (isGrams || isMl) ? '1' : isPasta ? '25' : '0.025'}
               min="0.01"
               value={quantity}
               onChange={(e) => setQuantity(Math.max(0.01, parseFloat(e.target.value) || 0))}
@@ -345,7 +380,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
                   key={chip.label}
                   type="button"
                   onClick={() => {
-                    setQuantity(isSpice ? chip.val : snapToCulinaryFraction(chip.val));
+                    setQuantity(isSpice || isPasta ? chip.val : snapToCulinaryFraction(chip.val));
                   }}
                   className="px-2.5 py-1 bg-white hover:bg-[#faeee8] text-[#201b16] hover:text-[#cc5a35] text-xs font-sans font-medium rounded-lg border border-[#e8e2d8] whitespace-nowrap active:scale-95 transition-all shrink-0"
                 >
@@ -364,7 +399,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
                   key={chip.label}
                   type="button"
                   onClick={() => {
-                    if (isSpice) {
+                    if (isSpice || isPasta) {
                       setQuantity((q) => Math.max(1, Math.round(q + chip.delta)));
                     } else {
                       setQuantity((q) => snapToCulinaryFraction(Math.max(0.125, q + chip.delta)));
@@ -380,7 +415,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
         </div>
 
         {/* Split and Merge Group Actions */}
-        {!isBread && !isGarlic && !isSpice && (
+        {!isBread && !isGarlic && !isSpice && !isPasta && (
           <div className="mb-5 space-y-2">
             {quantity >= 2 && (
               <div className="p-3 bg-[#fbf9f5] border border-[#e8e2d8] rounded-xl flex items-center justify-between">
@@ -545,8 +580,59 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
           </div>
         )}
 
+        {/* Pasta Shape Configuration */}
+        {isPasta && (
+          <div className="mb-5 bg-[#fbf9f5] border border-[#e8e2d8] rounded-2xl p-3.5">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
+                Pasta Shape
+              </label>
+              <span className="text-xs font-mono font-bold text-[#cc5a35] bg-[#faeee8] px-2.5 py-0.5 rounded-full border border-[#f0d9cf] flex items-center space-x-1">
+                <span>{getPastaShapeEmoji(pastaShape)}</span>
+                <span>{pastaShape}</span>
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-2.5">
+              {COMMON_PASTA_SHAPES.map((shape) => {
+                const isSelected = pastaShape.toLowerCase() === shape.name.toLowerCase();
+                return (
+                  <button
+                    key={shape.name}
+                    type="button"
+                    onClick={() => {
+                      setPastaShape(shape.name);
+                    }}
+                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-xs font-sans transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#faeee8] border-[#cc5a35] text-[#8a3319] shadow-xs font-semibold ring-2 ring-[#cc5a35]/30'
+                        : 'bg-white border-[#e8e2d8] text-[#685f54] hover:bg-[#f5f1ea]'
+                    }`}
+                  >
+                    <span className="text-lg mb-0.5">{shape.emoji}</span>
+                    <span className="font-medium text-xs text-[#201b16] truncate max-w-full">{shape.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-[#796f64] shrink-0 font-sans">Custom:</span>
+              <input
+                type="text"
+                placeholder="e.g. Orecchiette, Tagliatelle, Orzo"
+                value={COMMON_PASTA_SHAPES.some((s) => s.name.toLowerCase() === pastaShape.toLowerCase()) ? '' : pastaShape}
+                onChange={(e) => {
+                  if (e.target.value.trim()) {
+                    setPastaShape(e.target.value);
+                  }
+                }}
+                className="flex-1 px-3 py-1.5 bg-white border border-[#e8e2d8] rounded-xl text-xs font-sans font-medium text-[#201b16] placeholder:text-[#b5ab9e] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Physical Size Tier Switcher */}
-        {!isSpice && (
+        {!isSpice && !isPasta && (
           <div className="mb-5">
             <label className="block text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider mb-2">
               Physical Size Tier

@@ -420,13 +420,19 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                       <div className="text-left pr-1">
                         <div className="flex items-center space-x-1.5">
                           <span className="block text-xs sm:text-sm font-medium text-[#f5efe6] capitalize leading-tight">
-                            {sizeTier === 'small'
+                            {pi.pastaShape
+                              ? pi.name
+                              : sizeTier === 'small'
                               ? `Small ${pi.name}`
                               : sizeTier === 'large'
                               ? `Large ${pi.name}`
                               : pi.name}
                           </span>
-                          {sizeTier !== 'medium' && (
+                          {pi.pastaShape ? (
+                            <span className="text-[9px] font-sans font-bold px-1.5 py-0.5 rounded leading-none bg-[#faeee8] text-[#cc5a35] border border-[#f0d9cf]">
+                              {pi.pastaShape}
+                            </span>
+                          ) : sizeTier !== 'medium' && (
                             <span
                               className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded leading-none ${
                                 sizeTier === 'small'
