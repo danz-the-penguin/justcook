@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { usePantryStore } from '@/stores/usePantryStore';
-import { Volume2, VolumeX, ChefHat, BookOpen, Trophy, ShoppingBag, Save, Calendar } from 'lucide-react';
+import { Volume2, VolumeX, ChefHat, BookOpen, Trophy, ShoppingBag, Save, Calendar, Scale } from 'lucide-react';
 import { ShoppingListDrawer } from '@/components/shopping/ShoppingListDrawer';
 import { SaveLoadModal } from '@/components/pantry/SaveLoadModal';
 import { MealPlannerDrawer } from '@/components/planner/MealPlannerDrawer';
+import { CulinaryRatioModal } from '@/components/recipes/CulinaryRatioModal';
 import { sound } from '@/lib/audio';
 
 export function Navbar({ activePage = 'pantry' }: { activePage?: 'pantry' | 'recipes' | 'trophies' }) {
@@ -17,6 +18,7 @@ export function Navbar({ activePage = 'pantry' }: { activePage?: 'pantry' | 'rec
   const [isShoppingOpen, setIsShoppingOpen] = useState(false);
   const [isSaveLoadOpen, setIsSaveLoadOpen] = useState(false);
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+  const [isRatioOpen, setIsRatioOpen] = useState(false);
 
   useEffect(() => {
     fetchShopCount();
@@ -157,6 +159,19 @@ export function Navbar({ activePage = 'pantry' }: { activePage?: 'pantry' | 'rec
               <span className="hidden lg:inline">Save / Load</span>
             </button>
 
+            {/* Culinary Ratio & Portion Studio */}
+            <button
+              onClick={() => {
+                sound.playWoodTap();
+                setIsRatioOpen(true);
+              }}
+              className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 h-9 sm:h-11 rounded-xl text-xs sm:text-base font-sans font-medium bg-white border border-[#e2d9cc] text-[#201b16] hover:bg-[#f5f1ea] shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Open Culinary Ratio & Portion Studio"
+            >
+              <Scale className="w-4 h-4 sm:w-5 sm:h-5 text-[#cc5a35]" />
+              <span className="hidden xl:inline">Ratios</span>
+            </button>
+
             {/* Weekly Meal Planner */}
             <button
               onClick={() => {
@@ -251,6 +266,12 @@ export function Navbar({ activePage = 'pantry' }: { activePage?: 'pantry' | 'rec
       <MealPlannerDrawer
         isOpen={isPlannerOpen}
         onClose={() => setIsPlannerOpen(false)}
+      />
+
+      {/* Culinary Ratio & Portion Studio Modal */}
+      <CulinaryRatioModal
+        isOpen={isRatioOpen}
+        onClose={() => setIsRatioOpen(false)}
       />
     </>
   );

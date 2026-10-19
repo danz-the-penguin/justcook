@@ -68,7 +68,23 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const [isDraggingAny, setIsDraggingAny] = useState(false);
   const [focusedBatchId, setFocusedBatchId] = useState<string | null>(null);
   const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
+  const [isToasted, setIsToasted] = useState(false);
   const lastDragEndTimeRef = useRef<number>(0);
+
+  const getProduceRipenessFilter = (daysLeft?: number) => {
+    if (isSpice) return undefined;
+    if (isBread && isToasted) {
+      return 'sepia(0.65) saturate(1.4) contrast(1.1) brightness(0.92)';
+    }
+    if (isBread || daysLeft === undefined) return undefined;
+    if (daysLeft <= 0) {
+      return 'grayscale(35%) brightness(90%) contrast(95%)';
+    }
+    if (daysLeft <= 2) {
+      return 'saturate(125%) sepia(15%)';
+    }
+    return undefined;
+  };
 
   const primaryBatch = item.batches[0];
   const focusedBatch = item.batches.find((b) => b.id === focusedBatchId) || null;
@@ -540,33 +556,49 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     <div
       className={`group relative flex flex-col justify-between bg-white rounded-2xl p-4 sm:p-6 border border-[#e5dec9] hover:border-[#cfc5b4] shadow-xs transition-all duration-200 ${freshnessConfig.glow} ${isDraggingAny ? 'z-50' : 'z-0'}`}
     >
-      {/* Top Header: Name, Edit Button, Category, Freshness Pill */}
+      {/* Top Header: Unclipped Name, Edit Button, Freshness Pill & Group Controls */}
       <div>
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="min-w-0 pr-1">
-            <div className="flex items-center space-x-2">
-              <h3 className="font-serif text-xl sm:text-2xl font-medium text-[#201b16] capitalize tracking-tight leading-snug truncate">
-                {item.name}
-              </h3>
-              {onEditItem && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditItem(item);
-                  }}
-                  className="w-7 h-7 rounded-lg bg-[#faf8f5] hover:bg-[#f0ebe1] text-[#787067] hover:text-[#cc5a35] flex items-center justify-center border border-[#e5dec9] transition-colors shrink-0"
-                  title="Edit item name, category, or replace artwork"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <span className="text-xs sm:text-sm font-sans text-[#787067] capitalize">
-              {item.category} • {locationIcons[primaryBatch?.location || 'fridge']}
-            </span>
+        {/* Row 1: Hero Food Name & Freshness Status Badge */}
+        <div className="flex items-start justify-between gap-2.5 mb-1.5">
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
+            <h3
+              title={item.name}
+              className="font-serif text-xl sm:text-2xl font-medium text-[#201b16] capitalize tracking-tight leading-snug break-words"
+            >
+              {item.name}
+            </h3>
+            {onEditItem && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditItem(item);
+                }}
+                className="w-7 h-7 rounded-lg bg-[#faf8f5] hover:bg-[#f0ebe1] text-[#787067] hover:text-[#cc5a35] flex items-center justify-center border border-[#e5dec9] transition-colors shrink-0"
+                title="Edit item name, category, or replace artwork"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Freshness Badge & Multi-Batch Pill */}
+          {/* Primary Freshness Pill */}
+          {targetBatch && (
+            <button
+              onClick={() => onEditBatch(targetBatch, item)}
+              className={`text-xs font-sans font-medium px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-transform hover:scale-105 shrink-0 whitespace-nowrap ${freshnessConfig.badgeBg}`}
+              title="Click to view and adjust expiration dates"
+            >
+              {freshnessConfig.label}
+            </button>
+          )}
+        </div>
+
+        {/* Row 2: Category, Location, and Multi-Batch Controls */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <span className="text-xs sm:text-sm font-sans text-[#787067] capitalize">
+            {item.category} • {locationIcons[primaryBatch?.location || 'fridge']}
+          </span>
+
           <div className="flex items-center space-x-1.5 shrink-0">
             {hasMultipleBatches && (
               <span
@@ -585,15 +617,6 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
               <Plus className="w-3 h-3" />
               <span>Group</span>
             </button>
-            {targetBatch && (
-              <button
-                onClick={() => onEditBatch(targetBatch, item)}
-                className={`text-xs font-sans font-medium px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-transform hover:scale-105 shrink-0 whitespace-nowrap ${freshnessConfig.badgeBg}`}
-                title="Click to view and adjust expiration dates"
-              >
-                {freshnessConfig.label}
-              </button>
-            )}
           </div>
         </div>
 
@@ -879,7 +902,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                         alt={item.name}
                         width={imageSize}
                         height={imageSize}
-                        className="object-contain pointer-events-none drop-shadow-sm max-h-full max-w-full"
+                        style={{ filter: getProduceRipenessFilter(s.daysLeft) }}
+                        className="object-contain pointer-events-none drop-shadow-sm max-h-full max-w-full transition-[filter] duration-300"
                         priority={idx < 4}
                       />
                       {/* Urgent Expiry Alert Badge ONLY when critical (≤ 2 days) */}
@@ -932,7 +956,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           alt={item.name}
                           width={imageSize}
                           height={imageSize}
-                          className="object-contain drop-shadow-sm max-h-full max-w-full"
+                          style={{ filter: getProduceRipenessFilter(s.daysLeft) }}
+                          className="object-contain drop-shadow-sm max-h-full max-w-full transition-[filter] duration-300"
                         />
                       </div>
 
@@ -1012,11 +1037,32 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
         </div>
       </div>
 
-      {/* Quick Step Selector Chips */}
+      {/* Quick Step Selector Chips & Optional Bread Toast Toggle */}
       <div className="mt-3 pt-2.5 border-t border-[#efeae1] flex items-center justify-between gap-1.5">
-        <span className="text-[11px] font-sans font-semibold text-[#8c8276] uppercase tracking-wider shrink-0">
-          Step
-        </span>
+        <div className="flex items-center space-x-1.5 shrink-0">
+          <span className="text-[11px] font-sans font-semibold text-[#8c8276] uppercase tracking-wider">
+            Step
+          </span>
+          {isBread && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsToasted((prev) => !prev);
+                sound.playToast();
+              }}
+              className={`px-2 py-0.5 text-[11px] font-sans font-medium rounded-md border transition-all flex items-center space-x-1 cursor-pointer ${
+                isToasted
+                  ? 'bg-[#b45309] text-white border-[#b45309] shadow-2xs font-semibold'
+                  : 'bg-white hover:bg-[#fffbeb] text-[#92400e] border-[#fde68a]'
+              }`}
+              title={isToasted ? 'Bread is toasted golden-brown (tap to un-toast)' : 'Click to toast bread slices'}
+            >
+              <span>🍞</span>
+              <span>{isToasted ? 'Toasted' : 'Toast'}</span>
+            </button>
+          )}
+        </div>
         <div className="flex items-center space-x-1 overflow-x-auto py-0.5 no-scrollbar">
           {availableSteps.map((st, idx) => {
             const isSelected = (stepIdx % availableSteps.length) === idx;

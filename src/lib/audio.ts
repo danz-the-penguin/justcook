@@ -3,11 +3,16 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private muted: boolean = false;
+  private volume: number = 1.0;
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('justcook_muted');
-      this.muted = saved === 'true';
+      const savedMuted = localStorage.getItem('justcook_muted');
+      this.muted = savedMuted === 'true';
+      const savedVol = localStorage.getItem('justcook_volume');
+      if (savedVol) {
+        this.volume = Math.max(0, Math.min(1, parseFloat(savedVol)));
+      }
     }
   }
 
@@ -39,6 +44,17 @@ class SoundEngine {
   public toggleMute(): boolean {
     this.setMuted(!this.muted);
     return this.muted;
+  }
+
+  public getVolume(): number {
+    return this.volume;
+  }
+
+  public setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('justcook_volume', String(this.volume));
+    }
   }
 
   // Soft bouncy pop / crack (for adding or consuming eggs & produce)
@@ -180,11 +196,12 @@ class SoundEngine {
   }
 
   // Mobile Web Haptics
-  public triggerHaptic(type: 'light' | 'medium' | 'slice' | 'success' | 'impact' = 'light') {
+  public triggerHaptic(type: 'light' | 'medium' | 'slice' | 'success' | 'impact' | 'sizzle' | 'toast' | 'snap' | 'tick' = 'light') {
     if (typeof window === 'undefined' || !('vibrate' in navigator)) return;
     try {
       switch (type) {
         case 'light':
+        case 'tick':
           navigator.vibrate(10);
           break;
         case 'medium':
@@ -196,6 +213,15 @@ class SoundEngine {
         case 'impact':
           navigator.vibrate([30, 35, 25]);
           break;
+        case 'sizzle':
+          navigator.vibrate([12, 35, 15, 50, 15]);
+          break;
+        case 'toast':
+          navigator.vibrate([20, 15, 25]);
+          break;
+        case 'snap':
+          navigator.vibrate([25, 40]);
+          break;
         case 'success':
           navigator.vibrate([20, 40, 30]);
           break;
@@ -203,27 +229,27 @@ class SoundEngine {
     } catch {}
   }
 
-  // Hot pan sizzle on ingredient drop (rich 0.85s searing skillet crackle)
-  public playSizzle() {
-    this.triggerHaptic('slice');
+  // Hot pan sizzle on ingredient drop with adjustable heat level
+  public playSizzle(heatLevel: 'low' | 'medium' | 'high' = 'medium') {
+    this.triggerHaptic('sizzle');
     if (this.muted) return;
     const ctx = this.initCtx();
     if (!ctx) return;
 
     try {
       const now = ctx.currentTime;
-      const duration = 0.85;
+      const duration = heatLevel === 'low' ? 0.7 : heatLevel === 'high' ? 1.15 : 0.85;
       const bufferSize = Math.floor(ctx.sampleRate * duration);
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
 
-      // Generate sizzling oil crackle with random micro-bursts
+      const microBurstProb = heatLevel === 'low' ? 0.015 : heatLevel === 'high' ? 0.065 : 0.035;
+      const microBurstAmp = heatLevel === 'low' ? 1.0 : heatLevel === 'high' ? 2.2 : 1.8;
+
       for (let i = 0; i < bufferSize; i++) {
         const t = i / bufferSize;
         const baseNoise = Math.random() * 2 - 1;
-        // Random sizzle droplets (bursts of hot oil)
-        const microBurst = Math.random() < 0.035 ? (Math.random() * 1.8 - 0.9) : 0;
-        // Natural sizzle envelope: fast attack, steady sizzle, gradual gentle decay
+        const microBurst = Math.random() < microBurstProb ? (Math.random() * microBurstAmp - microBurstAmp / 2) : 0;
         const envelope = t < 0.08 ? t / 0.08 : Math.pow(1 - (t - 0.08) / 0.92, 1.4);
         output[i] = (baseNoise * 0.7 + microBurst * 0.3) * envelope;
       }
@@ -231,15 +257,18 @@ class SoundEngine {
       const whiteNoise = ctx.createBufferSource();
       whiteNoise.buffer = noiseBuffer;
 
-      // Bandpass filter centered at 3000Hz gives that distinct hot butter/oil sizzle tone
+      const filterFreq = heatLevel === 'low' ? 2400 : heatLevel === 'high' ? 4400 : 3200;
+      const filterQ = heatLevel === 'low' ? 1.4 : heatLevel === 'high' ? 2.2 : 1.8;
+
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(3200, now);
-      filter.Q.setValueAtTime(1.8, now);
+      filter.frequency.setValueAtTime(filterFreq, now);
+      filter.Q.setValueAtTime(filterQ, now);
 
+      const baseGain = (heatLevel === 'low' ? 0.22 : heatLevel === 'high' ? 0.46 : 0.35) * this.volume;
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.35, now);
-      gain.gain.linearRampToValueAtTime(0.32, now + 0.15);
+      gain.gain.setValueAtTime(baseGain, now);
+      gain.gain.linearRampToValueAtTime(baseGain * 0.92, now + 0.15);
       gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
       whiteNoise.connect(filter);
@@ -248,6 +277,70 @@ class SoundEngine {
 
       whiteNoise.start(now);
       whiteNoise.stop(now + duration);
+    } catch {}
+  }
+
+  // Crispy toast crunch sound (golden browned bread)
+  public playToast() {
+    this.triggerHaptic('toast');
+    if (this.muted) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const duration = 0.22;
+      const bufferSize = Math.floor(ctx.sampleRate * duration);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        const t = i / bufferSize;
+        const env = Math.exp(-t * 14);
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+      const noiseSource = ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(1800, now);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.28 * this.volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noiseSource.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      noiseSource.start(now);
+      noiseSource.stop(now + duration);
+    } catch {}
+  }
+
+  // Meal prep container lid snap sound
+  public playSnap() {
+    this.triggerHaptic('snap');
+    if (this.muted) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(240, now + 0.05);
+
+      gain.gain.setValueAtTime(0.3 * this.volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.055);
     } catch {}
   }
 

@@ -324,6 +324,79 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
           </div>
         </div>
 
+        {/* Split and Merge Group Actions */}
+        {!isBread && !isSpice && (
+          <div className="mb-5 space-y-2">
+            {quantity >= 2 && (
+              <div className="p-3 bg-[#fbf9f5] border border-[#e8e2d8] rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-[#201b16] block">Split Group</span>
+                  <span className="text-[11px] text-[#796f64]">
+                    Divide {quantity} {batch.unit} into 2 independent groups
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSaving(true);
+                    const half = Math.floor(quantity / 2);
+                    const remainder = snapToCulinaryFraction(quantity - half);
+                    await updateBatchQuantity(batch.id, half);
+                    await addNewItemBatch({
+                      slug: item.slug,
+                      name: item.name,
+                      category: item.category,
+                      location: batch.location,
+                      quantity: remainder,
+                      unit: batch.unit,
+                      size: batchSize,
+                      expiresAt: expiryDate,
+                    });
+                    setIsSaving(false);
+                    onClose();
+                  }}
+                  className="px-2.5 py-1 text-xs font-sans font-medium bg-white hover:bg-[#faeee8] text-[#cc5a35] rounded-lg border border-[#cc5a35]/40 transition-colors cursor-pointer shadow-2xs"
+                >
+                  ✂️ Split into {Math.floor(quantity / 2)} + {snapToCulinaryFraction(quantity - Math.floor(quantity / 2))}
+                </button>
+              </div>
+            )}
+
+            {(() => {
+              const siblings = item.batches.filter(
+                (b) => b.id !== batch.id && (b.size || 'medium') === (batch.size || 'medium') && b.quantity > 0
+              );
+              if (siblings.length === 0) return null;
+              return (
+                <div className="p-3 bg-[#fbf9f5] border border-[#e8e2d8] rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-medium text-[#201b16] block">Merge Groups</span>
+                    <span className="text-[11px] text-[#796f64]">
+                      Combine with {siblings.length} other {batch.size || 'medium'} group(s)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsSaving(true);
+                      const totalToAdd = siblings.reduce((sum, b) => sum + b.quantity, 0);
+                      await updateBatchQuantity(batch.id, snapToCulinaryFraction(quantity + totalToAdd));
+                      for (const sib of siblings) {
+                        await deleteBatch(sib.id);
+                      }
+                      setIsSaving(false);
+                      onClose();
+                    }}
+                    className="px-2.5 py-1 text-xs font-sans font-medium bg-white hover:bg-[#faeee8] text-[#cc5a35] rounded-lg border border-[#cc5a35]/40 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    🔗 Merge All
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Loaf Slice Capacity Configuration */}
         {isBread && (
           <div className="mb-5 bg-[#fbf9f5] border border-[#e8e2d8] rounded-2xl p-3.5">

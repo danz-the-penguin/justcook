@@ -26,7 +26,21 @@ interface CulinaryRatioModalProps {
   onCookRecipe?: (recipe: any) => void;
 }
 
-type RatioPresetId = 'mcd_eggs' | 'rice_grains' | 'pancakes' | 'vinaigrette' | 'pasta_water' | 'custom';
+type RatioPresetId = 'mcd_eggs' | 'rice_grains' | 'pancakes' | 'vinaigrette' | 'pasta_water' | 'custom' | 'converter';
+
+interface SavedCustomRatio {
+  id: string;
+  name: string;
+  anchorName: string;
+  anchorQty: number;
+  anchorUnit: string;
+  companion1Name: string;
+  companion1Ratio: number;
+  companion1Unit: string;
+  companion2Name: string;
+  companion2Ratio: number;
+  companion2Unit: string;
+}
 
 interface GrainConfig {
   name: string;
@@ -107,6 +121,78 @@ export function CulinaryRatioModal({ isOpen, onClose, onCookRecipe }: CulinaryRa
   const [customCompanion2Name, setCustomCompanion2Name] = useState('Butter / Fat');
   const [customCompanion2Ratio, setCustomCompanion2Ratio] = useState<number>(0.1); // 10%
   const [customCompanion2Unit, setCustomCompanion2Unit] = useState('g');
+
+  // Saved Custom Ratios State
+  const [savedRatios, setSavedRatios] = useState<SavedCustomRatio[]>([]);
+  const [newRatioName, setNewRatioName] = useState('');
+  const [isSavingRatio, setIsSavingRatio] = useState(false);
+  const [ratioSaveSuccess, setRatioSaveSuccess] = useState<string | null>(null);
+
+  // 7. Unit Converter State
+  const [convAmount, setConvAmount] = useState<number>(1);
+  const [convIngredient, setConvIngredient] = useState<'flour' | 'sugar' | 'butter' | 'liquid' | 'egg'>('flour');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('justcook_saved_ratios');
+        if (stored) {
+          setSavedRatios(JSON.parse(stored));
+        }
+      } catch {}
+    }
+  }, []);
+
+  const handleSaveCurrentRatio = () => {
+    if (!newRatioName.trim()) return;
+    sound.playSuccess();
+    const newEntry: SavedCustomRatio = {
+      id: Date.now().toString(36),
+      name: newRatioName.trim(),
+      anchorName: customAnchorName,
+      anchorQty: customAnchorQty,
+      anchorUnit: customAnchorUnit,
+      companion1Name: customCompanion1Name,
+      companion1Ratio: customCompanion1Ratio,
+      companion1Unit: customCompanion1Unit,
+      companion2Name: customCompanion2Name,
+      companion2Ratio: customCompanion2Ratio,
+      companion2Unit: customCompanion2Unit,
+    };
+    const nextList = [newEntry, ...savedRatios.slice(0, 19)];
+    setSavedRatios(nextList);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('justcook_saved_ratios', JSON.stringify(nextList));
+    }
+    setNewRatioName('');
+    setIsSavingRatio(false);
+    setRatioSaveSuccess(`Saved "${newEntry.name}"!`);
+    setTimeout(() => setRatioSaveSuccess(null), 3500);
+  };
+
+  const handleLoadSavedRatio = (r: SavedCustomRatio) => {
+    sound.playWoodTap();
+    setCustomAnchorName(r.anchorName);
+    setCustomAnchorQty(r.anchorQty);
+    setCustomAnchorUnit(r.anchorUnit);
+    setCustomCompanion1Name(r.companion1Name);
+    setCustomCompanion1Ratio(r.companion1Ratio);
+    setCustomCompanion1Unit(r.companion1Unit);
+    setCustomCompanion2Name(r.companion2Name);
+    setCustomCompanion2Ratio(r.companion2Ratio);
+    setCustomCompanion2Unit(r.companion2Unit);
+    setActivePreset('custom');
+  };
+
+  const handleDeleteSavedRatio = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    sound.playPop();
+    const nextList = savedRatios.filter((r) => r.id !== id);
+    setSavedRatios(nextList);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('justcook_saved_ratios', JSON.stringify(nextList));
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -384,6 +470,20 @@ export function CulinaryRatioModal({ isOpen, onClose, onCookRecipe }: CulinaryRa
             }`}
           >
             <span>⚙️ Custom</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sound.playWoodTap();
+              setActivePreset('converter');
+            }}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
+              activePreset === 'converter'
+                ? 'bg-[#cc5a35] text-white shadow-xs'
+                : 'bg-white text-[#5c5349] border border-[#e8e2d8] hover:bg-[#f2ede4]'
+            }`}
+          >
+            <span>📐 Unit Converter</span>
           </button>
         </div>
 
@@ -1091,8 +1191,237 @@ export function CulinaryRatioModal({ isOpen, onClose, onCookRecipe }: CulinaryRa
                   </div>
                 </div>
               </div>
+
+              {/* Saved Custom Ratios Quick Bar */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#e8e2d8] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-serif text-base font-medium text-[#201b16]">
+                    ⭐ Your Saved Formulas ({savedRatios.length})
+                  </span>
+                  {!isSavingRatio && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSavingRatio(true)}
+                      className="text-xs font-sans text-[#cc5a35] hover:underline flex items-center space-x-1 cursor-pointer font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Save Current Ratio</span>
+                    </button>
+                  )}
+                </div>
+
+                {ratioSaveSuccess && (
+                  <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                    {ratioSaveSuccess}
+                  </div>
+                )}
+
+                {isSavingRatio && (
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="text"
+                      placeholder="Name (e.g. My 3-Egg Fluffy Scramble)"
+                      value={newRatioName}
+                      onChange={(e) => setNewRatioName(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-xs bg-[#faf8f5] border border-[#e8e2d8] rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentRatio}
+                      className="px-3 py-1.5 bg-[#cc5a35] text-white text-xs font-medium rounded-xl hover:bg-[#b54926] cursor-pointer"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSavingRatio(false)}
+                      className="text-xs text-[#796f64] hover:text-[#201b16] px-2 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {savedRatios.length > 0 ? (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    {savedRatios.map((r) => (
+                      <div
+                        key={r.id}
+                        onClick={() => handleLoadSavedRatio(r)}
+                        className="group flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-[#faf8f5] hover:bg-[#f0ebe1] border border-[#e8e2d8] text-xs font-sans text-[#4a4238] cursor-pointer transition-all"
+                      >
+                        <span className="font-medium">{r.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteSavedRatio(r.id, e)}
+                          className="opacity-40 group-hover:opacity-100 text-[#8c8276] hover:text-red-500 transition-opacity ml-1"
+                          title="Delete saved ratio"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#8c8276] italic font-serif">
+                    No custom formulas saved yet. Save your favorite dough hydration or egg-to-dairy ratios for quick recall.
+                  </p>
+                )}
+              </div>
             </div>
           )}
+
+          {/* ========================================================================= */}
+          {/* PRESET 7: INSTANT CULINARY UNIT CONVERTER                                 */}
+          {/* ========================================================================= */}
+          {activePreset === 'converter' && (() => {
+            const getConverterData = () => {
+              switch (convIngredient) {
+                case 'flour':
+                  return {
+                    name: 'All-Purpose Flour',
+                    gramsPerCup: 120,
+                    icon: '🌾',
+                    notes: '1 cup = ~120g • 1 tbsp = ~7.5g • 1 oz = ~28.3g',
+                  };
+                case 'sugar':
+                  return {
+                    name: 'Granulated Sugar',
+                    gramsPerCup: 200,
+                    icon: '🍬',
+                    notes: '1 cup = ~200g • 1 tbsp = ~12.5g • 1 oz = ~28.3g',
+                  };
+                case 'butter':
+                  return {
+                    name: 'Butter / Solid Fat',
+                    gramsPerCup: 227,
+                    icon: '🧈',
+                    notes: '1 cup = 2 sticks = 227g (8 oz) • 1 stick = ½ cup = 113g • 1 tbsp = ~14.2g',
+                  };
+                case 'liquid':
+                  return {
+                    name: 'Liquid (Water / Milk)',
+                    gramsPerCup: 240,
+                    icon: '💧',
+                    notes: '1 cup = 240ml = 240g (8 fl oz) • 1 tbsp = 15ml • 1 tsp = 5ml',
+                  };
+                case 'egg':
+                  return {
+                    name: 'Whole Large Eggs',
+                    gramsPerCup: 200,
+                    icon: '🥚',
+                    notes: '1 Large Egg = ~50g liquid (~3.3 tbsp / 45ml / 1.76 oz)',
+                  };
+              }
+            };
+
+            const data = getConverterData();
+            const totalGrams = convIngredient === 'egg'
+              ? Math.round(convAmount * 50 * 10) / 10
+              : Math.round(convAmount * data.gramsPerCup * 10) / 10;
+            const totalOunces = Math.round((totalGrams / 28.3495) * 10) / 10;
+            const totalTbsp = convIngredient === 'egg'
+              ? Math.round(convAmount * 3.3 * 10) / 10
+              : Math.round(convAmount * 16 * 10) / 10;
+            const totalMl = convIngredient === 'egg'
+              ? Math.round(convAmount * 45)
+              : Math.round(convAmount * 240);
+
+            return (
+              <div className="space-y-4">
+                <div className="bg-[#faeee8] border border-[#f0d9cf] rounded-2xl p-4 sm:p-5">
+                  <span className="font-serif text-lg font-medium text-[#8a3319] block mb-1">
+                    {data.icon} {data.name} Conversions
+                  </span>
+                  <p className="text-xs sm:text-sm text-[#5a483a] leading-relaxed">
+                    {data.notes}
+                  </p>
+                </div>
+
+                {/* Ingredient Selector Pills */}
+                <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {[
+                    { id: 'flour', label: '🌾 Flour' },
+                    { id: 'sugar', label: '🍬 Sugar' },
+                    { id: 'butter', label: '🧈 Butter' },
+                    { id: 'liquid', label: '💧 Water/Milk' },
+                    { id: 'egg', label: '🥚 Eggs' },
+                  ].map((ing) => (
+                    <button
+                      key={ing.id}
+                      type="button"
+                      onClick={() => {
+                        sound.playPop();
+                        setConvIngredient(ing.id as any);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-sans font-medium transition-all shrink-0 cursor-pointer ${
+                        convIngredient === ing.id
+                          ? 'bg-[#201b16] text-white shadow-xs font-semibold'
+                          : 'bg-white text-[#5c5349] border border-[#e8e2d8] hover:bg-[#ede7dc]'
+                      }`}
+                    >
+                      {ing.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Amount Input */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#e8e2d8] space-y-3">
+                  <label className="text-xs font-semibold text-[#796f64] uppercase tracking-wider block">
+                    Quantity ({convIngredient === 'egg' ? 'Eggs' : 'Cups'}):
+                  </label>
+                  <div className="flex items-center justify-center space-x-6 py-2">
+                    <button
+                      onClick={() => {
+                        if (convAmount > (convIngredient === 'egg' ? 1 : 0.25)) {
+                          sound.playPop();
+                          setConvAmount((prev) => Math.max(0.25, Math.round((prev - (convIngredient === 'egg' ? 1 : 0.25)) * 100) / 100));
+                        }
+                      }}
+                      className="w-12 h-12 rounded-2xl bg-[#faf8f5] border border-[#e8e2d8] hover:bg-[#f0ebe1] active:scale-95 text-2xl font-medium text-[#201b16] shadow-xs flex items-center justify-center transition-all cursor-pointer"
+                    >
+                      <Minus className="w-5 h-5 text-[#4a4238]" />
+                    </button>
+                    <div className="text-center px-4">
+                      <span className="font-serif text-5xl font-medium text-[#201b16]">{convAmount}</span>
+                      <span className="text-xs block font-sans text-[#796f64] mt-0.5">
+                        {convIngredient === 'egg' ? (convAmount === 1 ? 'Whole Egg' : 'Whole Eggs') : (convAmount === 1 ? 'Cup' : 'Cups')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        sound.playPop();
+                        setConvAmount((prev) => Math.round((prev + (convIngredient === 'egg' ? 1 : 0.25)) * 100) / 100);
+                      }}
+                      className="w-12 h-12 rounded-2xl bg-[#faf8f5] border border-[#e8e2d8] hover:bg-[#f0ebe1] active:scale-95 text-2xl font-medium text-[#201b16] shadow-xs flex items-center justify-center transition-all cursor-pointer"
+                    >
+                      <Plus className="w-5 h-5 text-[#4a4238]" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conversion Matrix */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 bg-white rounded-xl border border-[#e8e2d8] text-center shadow-2xs">
+                    <span className="text-[11px] text-[#796f64] font-medium block">Weight (Grams)</span>
+                    <strong className="text-xl font-serif text-[#cc5a35]">{totalGrams}g</strong>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-[#e8e2d8] text-center shadow-2xs">
+                    <span className="text-[11px] text-[#796f64] font-medium block">Weight (Ounces)</span>
+                    <strong className="text-xl font-serif text-[#201b16]">{totalOunces} oz</strong>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-[#e8e2d8] text-center shadow-2xs">
+                    <span className="text-[11px] text-[#796f64] font-medium block">Volume (Metric)</span>
+                    <strong className="text-xl font-serif text-[#201b16]">{totalMl} ml</strong>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-[#e8e2d8] text-center shadow-2xs">
+                    <span className="text-[11px] text-[#796f64] font-medium block">Tablespoons</span>
+                    <strong className="text-xl font-serif text-[#201b16]">{totalTbsp} tbsp</strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Modal Footer Controls */}

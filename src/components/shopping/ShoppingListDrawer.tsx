@@ -21,12 +21,48 @@ interface ShoppingListDrawerProps {
 }
 
 export function ShoppingListDrawer({ isOpen, onClose }: ShoppingListDrawerProps) {
-  const { fetchPantry, fetchShopCount } = usePantryStore();
+  const { fetchPantry, fetchShopCount, items: pantryItems } = usePantryStore();
   const [items, setItems] = useState<ShoppingItemData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState('1');
   const [transferMessage, setTransferMessage] = useState<string | null>(null);
+
+  const handleAutoAddLowStock = async () => {
+    sound.playDing();
+    const lowStockItems = pantryItems.filter(
+      (pi) => pi.totalQuantity <= 1 || pi.freshnessStatus === 'critical' || pi.freshnessStatus === 'expired'
+    );
+    if (lowStockItems.length === 0) {
+      setTransferMessage('All pantry items are currently well-stocked! 🥬');
+      setTimeout(() => setTransferMessage(null), 3500);
+      return;
+    }
+
+    const payload = lowStockItems.map((item) => ({
+      name: item.name,
+      amount: 1,
+      unit: item.defaultUnit,
+      category: item.category,
+      sourceRecipe: 'Pantry Auto-Restock',
+    }));
+
+    try {
+      const res = await fetch('/api/shopping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: payload }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadItems();
+        setTransferMessage(`Added ${payload.length} low-stock item(s) to your shopping list! 🛒`);
+        setTimeout(() => setTransferMessage(null), 4000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const loadItems = useCallback(async () => {
     setIsLoading(true);
@@ -174,6 +210,16 @@ export function ShoppingListDrawer({ isOpen, onClose }: ShoppingListDrawerProps)
               <Plus className="w-4 h-4" />
             </button>
           </form>
+
+          {/* Auto-Add Low Stock / Depleted Items Action */}
+          <button
+            type="button"
+            onClick={handleAutoAddLowStock}
+            className="w-full py-2 px-3 bg-white hover:bg-[#faeee8] text-[#8a3319] hover:text-[#cc5a35] text-xs font-sans font-medium rounded-xl border border-dashed border-[#cc5a35]/40 flex items-center justify-center space-x-1.5 transition-all shadow-2xs mb-4 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#cc5a35]" />
+            <span>Auto-Add Low Stock Items ({pantryItems.filter((p) => p.totalQuantity <= 1 || p.freshnessStatus === 'critical' || p.freshnessStatus === 'expired').length})</span>
+          </button>
 
           {/* Items List */}
           {isLoading ? (

@@ -24,11 +24,26 @@ interface SizzleParticle {
   delay: number;
 }
 
+const RECIPE_TARGETS = [
+  { title: 'Scrambled Eggs', slug: 'scrambled-eggs', icon: '🍳', required: ['egg'], optional: ['milk', 'butter', 'bread'] },
+  { title: 'French Toast', slug: 'french-toast', icon: '🍞', required: ['bread', 'egg'], optional: ['milk', 'butter'] },
+  { title: 'Tomato Egg Stir-Fry', slug: 'tomato-egg', icon: '🍅', required: ['tomato', 'egg'], optional: ['garlic', 'onion', 'soy_sauce'] },
+  { title: 'Grilled Cheese', slug: 'grilled-cheese', icon: '🥪', required: ['bread', 'cheese'], optional: ['butter'] },
+  { title: 'Bruschetta', slug: 'bruschetta', icon: '🥖', required: ['bread', 'tomato'], optional: ['garlic', 'olive_oil'] },
+  { title: 'Egg Toast', slug: 'egg-toast', icon: '🍳', required: ['bread', 'egg'], optional: ['butter', 'cheese'] },
+  { title: 'Shakshuka', slug: 'shakshuka', icon: '🍳', required: ['egg', 'tomato'], optional: ['onion', 'bell_pepper'] },
+  { title: 'Pasta Pomodoro', slug: 'pasta-pomodoro', icon: '🍝', required: ['pasta', 'tomato'], optional: ['garlic', 'cheese', 'olive_oil'] },
+  { title: 'Egg Fried Rice', slug: 'egg-fried-rice', icon: '🍚', required: ['rice', 'egg'], optional: ['soy_sauce', 'onion', 'garlic'] },
+];
+
 export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) {
-  const { prepItems, clearPrepItems, removePrepItem, isPrepBoardOpen, setPrepBoardOpen } = usePantryStore();
+  const { prepItems, clearPrepItems, removePrepItem, isPrepBoardOpen, setPrepBoardOpen, addNewItemBatch } = usePantryStore();
+  const [heatLevel, setHeatLevel] = useState<'low' | 'medium' | 'high'>('medium');
   const [lastImpactTime, setLastImpactTime] = useState<number>(0);
   const [impactSlug, setImpactSlug] = useState<string | null>(null);
   const [particles, setParticles] = useState<SizzleParticle[]>([]);
+  const [mealPrepMessage, setMealPrepMessage] = useState<string | null>(null);
+  const [isPacking, setIsPacking] = useState(false);
 
   // Trigger visual impact flash & steam/sizzle particles whenever prepItems updates
   React.useEffect(() => {
@@ -36,12 +51,14 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
       const latest = prepItems[prepItems.length - 1];
       setImpactSlug(latest.slug);
       setLastImpactTime(Date.now());
-      sound.playSizzle();
+      sound.playSizzle(heatLevel);
 
       const now = Date.now();
       const newParticles: SizzleParticle[] = [];
-      // 8 soft steam puffs
-      for (let i = 0; i < 8; i++) {
+      const steamCount = heatLevel === 'low' ? 4 : heatLevel === 'high' ? 14 : 8;
+      const sparkCount = heatLevel === 'low' ? 3 : heatLevel === 'high' ? 16 : 8;
+
+      for (let i = 0; i < steamCount; i++) {
         newParticles.push({
           id: now + i,
           type: 'steam',
@@ -53,8 +70,7 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
           delay: Math.random() * 0.15,
         });
       }
-      // 8 golden grease sparks
-      for (let i = 8; i < 16; i++) {
+      for (let i = steamCount; i < steamCount + sparkCount; i++) {
         newParticles.push({
           id: now + i,
           type: 'sparkle',
@@ -74,7 +90,56 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
       }, 1300);
       return () => clearTimeout(timer);
     }
+  }, [prepItems, heatLevel]);
+
+  const topMatch = React.useMemo(() => {
+    if (prepItems.length === 0) return null;
+    const slugs = prepItems.map((p) => p.slug.toLowerCase());
+
+    let best: { title: string; icon: string; matchPercent: number; missing: string[] } | null = null;
+
+    for (const r of RECIPE_TARGETS) {
+      const matchedRequired = r.required.filter((req) => slugs.some((s) => s.includes(req) || req.includes(s)));
+      const missing = r.required.filter((req) => !slugs.some((s) => s.includes(req) || req.includes(s)));
+
+      const percent = Math.round((matchedRequired.length / r.required.length) * 100);
+      if (percent > 0 && (!best || percent > best.matchPercent)) {
+        best = {
+          title: r.title,
+          icon: r.icon,
+          matchPercent: percent,
+          missing,
+        };
+      }
+    }
+    return best;
   }, [prepItems]);
+
+  const handlePackMealPrep = async () => {
+    if (prepItems.length === 0 || isPacking) return;
+    setIsPacking(true);
+    sound.playSnap();
+
+    const uniqueNames = Array.from(new Set(prepItems.map((p) => p.name)));
+    const summary = uniqueNames.slice(0, 2).join(' & ') + (uniqueNames.length > 2 ? ' etc.' : '');
+    const dishName = `Meal Prep: ${summary}`;
+
+    await addNewItemBatch({
+      slug: `meal-prep-${Date.now().toString(36)}`,
+      name: dishName,
+      category: 'ready-to-eat',
+      location: 'fridge',
+      quantity: 1,
+      unit: 'box',
+      notes: `Skillet prep: ${prepItems.map((p) => `${formatQuantityWithCulinaryFraction(p.amount).display} ${p.unit} ${p.name}`).join(', ')}`,
+    });
+
+    clearPrepItems();
+    sound.playSuccess();
+    setIsPacking(false);
+    setMealPrepMessage(`🍱 Packed "${dishName}" into Fridge (fresh for 4 days)!`);
+    setTimeout(() => setMealPrepMessage(null), 4500);
+  };
 
   const totalIngredientsCount = prepItems.length;
 
@@ -148,6 +213,28 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
               </div>
 
               <div className="flex items-center space-x-2">
+                {/* Heat Level Selector */}
+                <div className="flex items-center space-x-1 bg-[#150e0a] p-1 rounded-xl border border-[#483726]">
+                  {(['low', 'medium', 'high'] as const).map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => {
+                        setHeatLevel(lvl);
+                        sound.playSizzle(lvl);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-sans font-medium transition-all cursor-pointer ${
+                        heatLevel === lvl
+                          ? 'bg-[#cc5a35] text-white shadow-2xs font-semibold'
+                          : 'text-[#9c8e7e] hover:text-[#f5efe6] hover:bg-white/5'
+                      }`}
+                      title={`Set skillet heat to ${lvl}`}
+                    >
+                      {lvl === 'low' ? '🔥 Low' : lvl === 'medium' ? '🔥🔥 Med' : '🔥🔥🔥 Sear'}
+                    </button>
+                  ))}
+                </div>
+
                 {totalIngredientsCount > 0 && (
                   <button
                     onClick={() => {
@@ -173,6 +260,48 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                 </button>
               </div>
             </div>
+
+            {/* Meal Prep Success Alert */}
+            {mealPrepMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-2.5 px-3 py-2 rounded-xl bg-emerald-950/80 border border-emerald-600/40 text-emerald-200 text-xs font-sans flex items-center justify-between"
+              >
+                <span>{mealPrepMessage}</span>
+                <button
+                  onClick={() => setMealPrepMessage(null)}
+                  className="text-emerald-400 hover:text-white ml-2 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </motion.div>
+            )}
+
+            {/* Live Recipe Matcher Suggestion */}
+            {topMatch && (
+              <div className="mb-2.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#2f1f14] via-[#3a2719] to-[#2f1f14] border border-[#cc5a35]/40 flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2">
+                  <span className="text-base">{topMatch.icon}</span>
+                  <span className="text-[#f5efe6] font-medium font-serif">
+                    {topMatch.matchPercent === 100 ? '✨ 100% Match:' : '⚡ Recipe Match:'} {topMatch.title}
+                  </span>
+                  {topMatch.missing.length > 0 && (
+                    <span className="text-[#d4af37] text-[11px] font-sans">
+                      (Add: {topMatch.missing.join(', ')})
+                    </span>
+                  )}
+                </div>
+                <Link
+                  href={`/recipes?q=${encodeURIComponent(topMatch.title)}`}
+                  className="text-[11px] font-sans text-[#e69374] hover:text-white flex items-center space-x-1 underline"
+                >
+                  <span>View Recipe</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            )}
 
             {/* Skillet Hot Surface Drop Zone */}
             <div
@@ -339,6 +468,17 @@ export function TactileImpactBoard({ onCookPrepared }: TactileImpactBoardProps) 
                 </span>
 
                 <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={handlePackMealPrep}
+                    disabled={isPacking}
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-[#2d221a] hover:bg-[#3d2f25] text-[#e69374] hover:text-white font-sans font-medium text-xs sm:text-sm rounded-xl border border-[#543f2c] active:scale-95 transition-all shadow-xs cursor-pointer"
+                    title="Pack all pan ingredients into a sealed meal prep container saved in your fridge"
+                  >
+                    <span>🍱</span>
+                    <span>{isPacking ? 'Packing...' : 'Pack Meal Prep'}</span>
+                  </button>
+
                   <Link
                     href="/recipes"
                     className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-1.5 px-4 py-2 bg-[#cc5a35] hover:bg-[#b54926] text-white font-sans font-medium text-xs sm:text-sm rounded-xl shadow-xs active:scale-95 transition-all"
