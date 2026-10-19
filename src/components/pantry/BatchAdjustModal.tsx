@@ -29,6 +29,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
   const [quantity, setQuantity] = useState<number>(batch?.quantity || 1);
   const [batchSize, setBatchSize] = useState<'small' | 'medium' | 'large'>(batch?.size || 'medium');
   const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(batch?.slicesPerLoaf || 8);
+  const [clovesPerBulb, setClovesPerBulb] = useState<number>(batch?.clovesPerBulb || batch?.slicesPerLoaf || 10);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -40,6 +41,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
       setQuantity(batch.quantity);
       setBatchSize(batch.size || 'medium');
       setSlicesPerLoaf(batch.slicesPerLoaf || 8);
+      setClovesPerBulb(batch.clovesPerBulb || batch.slicesPerLoaf || 10);
       setConfirmDelete(false);
     }
   }, [batch]);
@@ -66,6 +68,13 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     ['slice', 'slices', 'loaf', 'loaves'].includes(unitLower);
 
   const isLoafUnit = ['loaf', 'loaves'].includes(unitLower);
+
+  const isGarlic =
+    item.slug === 'garlic' ||
+    item.name.toLowerCase().includes('garlic') ||
+    ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unitLower);
+
+  const isBulbUnit = ['bulb', 'bulbs', 'head', 'heads'].includes(unitLower);
 
   const spiceGramPresets = [
     { label: '10g', val: 10 },
@@ -137,6 +146,41 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     { label: `-${Math.round(slicesPerLoaf / 2)} (½ loaf)`, delta: -Math.round(slicesPerLoaf / 2) },
   ];
 
+  const garlicBulbPresets = [
+    { label: '1 bulb', val: 1 },
+    { label: '½ bulb', val: 0.5 },
+    { label: '2 bulbs', val: 2 },
+    { label: '¼ bulb', val: 0.25 },
+    { label: '3 bulbs', val: 3 },
+  ];
+
+  const garlicBulbDeltas = [
+    { label: '+1 clove', delta: 1 / clovesPerBulb },
+    { label: '-1 clove', delta: -1 / clovesPerBulb },
+    { label: '+2 cloves', delta: 2 / clovesPerBulb },
+    { label: '-2 cloves', delta: -2 / clovesPerBulb },
+    { label: '+½ bulb', delta: 0.5 },
+    { label: '-½ bulb', delta: -0.5 },
+  ];
+
+  const garlicClovePresets = [
+    { label: `${clovesPerBulb} (1 bulb)`, val: clovesPerBulb },
+    { label: `${Math.round(clovesPerBulb / 2)} (½ bulb)`, val: Math.round(clovesPerBulb / 2) },
+    { label: `${clovesPerBulb * 2} (2 bulbs)`, val: clovesPerBulb * 2 },
+    { label: '4 cloves', val: 4 },
+    { label: '2 cloves', val: 2 },
+    { label: '1 clove', val: 1 },
+  ];
+
+  const garlicCloveDeltas = [
+    { label: '+1 clove', delta: 1 },
+    { label: '-1 clove', delta: -1 },
+    { label: '+2 cloves', delta: 2 },
+    { label: '-2 cloves', delta: -2 },
+    { label: `+${Math.round(clovesPerBulb / 2)} (½ bulb)`, delta: Math.round(clovesPerBulb / 2) },
+    { label: `-${Math.round(clovesPerBulb / 2)} (½ bulb)`, delta: -Math.round(clovesPerBulb / 2) },
+  ];
+
   const producePresets = [
     { label: '⅛', val: 0.125 },
     { label: '¼', val: 0.25 },
@@ -162,7 +206,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     { label: '-1', delta: -1 },
   ];
 
-  const quickPresets = isBread
+  const quickPresets = isGarlic
+    ? (isBulbUnit ? garlicBulbPresets : garlicClovePresets)
+    : isBread
     ? (isLoafUnit ? breadLoafPresets : breadSlicePresets)
     : isSpice && isGrams
     ? spiceGramPresets
@@ -170,7 +216,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     ? spiceMlPresets
     : producePresets;
 
-  const quickDeltas = isBread
+  const quickDeltas = isGarlic
+    ? (isBulbUnit ? garlicBulbDeltas : garlicCloveDeltas)
+    : isBread
     ? (isLoafUnit ? breadLoafDeltas : breadSliceDeltas)
     : isSpice && isGrams
     ? spiceGramDeltas
@@ -191,6 +239,9 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
     }
     if (isBread && slicesPerLoaf !== (batch.slicesPerLoaf || 8)) {
       await updateBatchSlices(batch.id, slicesPerLoaf);
+    }
+    if (isGarlic && clovesPerBulb !== (batch.clovesPerBulb || 10)) {
+      await updateBatchSlices(batch.id, clovesPerBulb);
     }
     const finalQuantity = isSpice ? quantity : snapToCulinaryFraction(quantity);
     if (finalQuantity !== batch.quantity) {
@@ -260,7 +311,11 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
               Stock Quantity ({batch.unit})
             </label>
             <span className="text-xs font-sans font-medium text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
-              Visual: {isBread
+              Visual: {isGarlic
+                ? isBulbUnit
+                  ? `${formatQuantityWithCulinaryFraction(quantity).display} bulb (${snapToCulinaryFraction(quantity * clovesPerBulb)} cloves)`
+                  : `${formatQuantityWithCulinaryFraction(quantity).display} cloves (${(quantity / clovesPerBulb).toFixed(1)} bulb)`
+                : isBread
                 ? isLoafUnit
                   ? `${formatQuantityWithCulinaryFraction(quantity).display} loaf (${snapToCulinaryFraction(quantity * slicesPerLoaf)} slices)`
                   : `${formatQuantityWithCulinaryFraction(quantity).display} slices (${(quantity / slicesPerLoaf).toFixed(1)} loaf)`
@@ -325,7 +380,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
         </div>
 
         {/* Split and Merge Group Actions */}
-        {!isBread && !isSpice && (
+        {!isBread && !isGarlic && !isSpice && (
           <div className="mb-5 space-y-2">
             {quantity >= 2 && (
               <div className="p-3 bg-[#fbf9f5] border border-[#e8e2d8] rounded-xl flex items-center justify-between">
@@ -397,36 +452,44 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
           </div>
         )}
 
-        {/* Loaf Slice Capacity Configuration */}
-        {isBread && (
+        {/* Loaf Slice / Bulb Clove Capacity Configuration */}
+        {(isBread || isGarlic) && (
           <div className="mb-5 bg-[#fbf9f5] border border-[#e8e2d8] rounded-2xl p-3.5">
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
-                Loaf Slice Capacity
+                {isGarlic ? 'Bulb Clove Capacity' : 'Loaf Slice Capacity'}
               </label>
               <span className="text-xs font-mono font-bold text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
-                {slicesPerLoaf} slices / loaf
+                {isGarlic ? `${clovesPerBulb} cloves / bulb` : `${slicesPerLoaf} slices / loaf`}
               </span>
             </div>
             <p className="text-[11px] text-[#8c8276] mb-2.5">
-              1 loaf = {slicesPerLoaf} slices. Taking 1 slice deducts 1/{slicesPerLoaf} from the loaf without making it disappear!
+              {isGarlic
+                ? `1 bulb = ${clovesPerBulb} cloves. Taking 1 clove deducts 1/${clovesPerBulb} from the bulb without making it disappear!`
+                : `1 loaf = ${slicesPerLoaf} slices. Taking 1 slice deducts 1/${slicesPerLoaf} from the loaf without making it disappear!`}
             </p>
 
             <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5 no-scrollbar mb-2.5">
-              {[6, 8, 10, 12, 14, 16, 20].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setSlicesPerLoaf(num)}
-                  className={`px-2.5 py-1 text-xs font-sans rounded-lg border transition-all cursor-pointer shrink-0 ${
-                    slicesPerLoaf === num
-                      ? 'bg-[#cc5a35] text-white border-[#cc5a35] font-semibold shadow-2xs'
-                      : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border-[#e8e2d8]'
-                  }`}
-                >
-                  {num} slices
-                </button>
-              ))}
+              {(isGarlic ? [4, 6, 8, 10, 12, 14, 16] : [6, 8, 10, 12, 14, 16, 20]).map((num) => {
+                const isSelected = isGarlic ? clovesPerBulb === num : slicesPerLoaf === num;
+                return (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => {
+                      if (isGarlic) setClovesPerBulb(num);
+                      else setSlicesPerLoaf(num);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-sans rounded-lg border transition-all cursor-pointer shrink-0 ${
+                      isSelected
+                        ? 'bg-[#cc5a35] text-white border-[#cc5a35] font-semibold shadow-2xs'
+                        : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border-[#e8e2d8]'
+                    }`}
+                  >
+                    {num} {isGarlic ? 'cloves' : 'slices'}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center space-x-2">
@@ -435,17 +498,23 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
                 type="number"
                 min="1"
                 max="64"
-                value={slicesPerLoaf}
-                onChange={(e) => setSlicesPerLoaf(Math.max(1, parseInt(e.target.value) || 8))}
+                value={isGarlic ? clovesPerBulb : slicesPerLoaf}
+                onChange={(e) => {
+                  const val = Math.max(1, parseInt(e.target.value) || (isGarlic ? 10 : 8));
+                  if (isGarlic) setClovesPerBulb(val);
+                  else setSlicesPerLoaf(val);
+                }}
                 className="w-20 px-2.5 py-1 bg-white border border-[#e8e2d8] rounded-lg text-xs font-mono font-bold text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
               />
-              <span className="text-xs text-[#796f64]">slices per whole loaf</span>
+              <span className="text-xs text-[#796f64]">
+                {isGarlic ? 'cloves per whole bulb' : 'slices per whole loaf'}
+              </span>
             </div>
 
             {batch.quantity > 1 && (
               <div className="mt-3 pt-2.5 border-t border-[#e8e2d8] flex items-center justify-between">
                 <span className="text-[11px] text-[#796f64]">
-                  Batch contains {batch.quantity} loaves.
+                  Batch contains {batch.quantity} {isGarlic ? 'bulbs' : 'loaves'}.
                 </span>
                 <button
                   type="button"
@@ -460,7 +529,8 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
                       quantity: Math.max(1, Math.round(batch.quantity - 1)),
                       unit: batch.unit,
                       size: batch.size || 'medium',
-                      slicesPerLoaf: slicesPerLoaf,
+                      slicesPerLoaf: isBread ? slicesPerLoaf : undefined,
+                      clovesPerBulb: isGarlic ? clovesPerBulb : undefined,
                       expiresAt: batch.expiresAt,
                     });
                     setIsSaving(false);
@@ -468,7 +538,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
                   }}
                   className="px-2.5 py-1 text-xs font-sans font-medium bg-white hover:bg-[#faeee8] text-[#cc5a35] rounded-lg border border-[#cc5a35]/40 transition-colors cursor-pointer"
                 >
-                  ✂️ Split into Individual Loaves
+                  ✂️ Split into Individual {isGarlic ? 'Bulbs' : 'Loaves'}
                 </button>
               </div>
             )}

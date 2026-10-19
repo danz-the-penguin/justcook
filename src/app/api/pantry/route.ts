@@ -34,6 +34,16 @@ export function extractLoafSlices(notes?: string | null): number {
   return 8;
 }
 
+export function extractBulbCloves(notes?: string | null): number {
+  if (!notes) return 10;
+  const match = notes.match(/cloves:\s*(\d+)/i) || notes.match(/slices:\s*(\d+)/i);
+  if (match && match[1]) {
+    const val = parseInt(match[1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  return 10;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -80,6 +90,7 @@ export async function GET(request: Request) {
           ...b,
           size: extractBatchSize(b.notes),
           slicesPerLoaf: extractLoafSlices(b.notes),
+          clovesPerBulb: extractBulbCloves(b.notes),
           freshness: getFreshnessStatus(b.expiresAt),
           daysLeft: Math.ceil((b.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
         })),
@@ -121,12 +132,16 @@ export async function POST(request: Request) {
 
     const finalSize = size || extractBatchSize(notes) || 'medium';
     const slicesCount = body.slicesPerLoaf || body.newSlices;
+    const clovesCount = body.clovesPerBulb || body.newCloves;
     let finalNotes = notes || null;
     if (finalSize) {
       finalNotes = finalNotes ? `${finalNotes} size:${finalSize}` : `size:${finalSize}`;
     }
     if (slicesCount && Number(slicesCount) > 0) {
       finalNotes = finalNotes ? `${finalNotes} slices:${slicesCount}` : `slices:${slicesCount}`;
+    }
+    if (clovesCount && Number(clovesCount) > 0) {
+      finalNotes = finalNotes ? `${finalNotes} cloves:${clovesCount}` : `cloves:${clovesCount}`;
     }
 
     const batch = await prisma.pantryItemBatch.create({
@@ -145,6 +160,7 @@ export async function POST(request: Request) {
       ...batch,
       size: finalSize,
       slicesPerLoaf: slicesCount ? Number(slicesCount) : extractLoafSlices(batch.notes),
+      clovesPerBulb: clovesCount ? Number(clovesCount) : extractBulbCloves(batch.notes),
       freshness: getFreshnessStatus(batch.expiresAt),
       daysLeft: Math.ceil((batch.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
     };
@@ -159,7 +175,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize, newSlices, slicesPerLoaf } = body;
+    const { batchId, quantityChange, newLocation, newExpiresAt, newNotes, newSize, newSlices, slicesPerLoaf, newCloves, clovesPerBulb } = body;
 
     if (!batchId) {
       return NextResponse.json({ success: false, error: 'batchId is required' }, { status: 400 });
@@ -205,7 +221,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Relocation, size, slices, or date update
+    // Relocation, size, slices, cloves, or date update
     const updateData: { location?: string; expiresAt?: Date; notes?: string } = {};
     if (newLocation && newLocation !== existingBatch.location) {
       updateData.location = newLocation;
@@ -221,9 +237,10 @@ export async function PATCH(request: Request) {
       updateData.expiresAt = new Date(newExpiresAt);
     }
     
-    // Notes, Size, and SlicesPerLoaf updates
+    // Notes, Size, SlicesPerLoaf, and ClovesPerBulb updates
     const targetSlices = newSlices !== undefined ? Number(newSlices) : slicesPerLoaf !== undefined ? Number(slicesPerLoaf) : undefined;
-    if (newNotes !== undefined || newSize || targetSlices !== undefined) {
+    const targetCloves = newCloves !== undefined ? Number(newCloves) : clovesPerBulb !== undefined ? Number(clovesPerBulb) : undefined;
+    if (newNotes !== undefined || newSize || targetSlices !== undefined || targetCloves !== undefined) {
       let baseNotes = (newNotes !== undefined ? newNotes : existingBatch.notes) || '';
       if (newSize) {
         baseNotes = baseNotes.replace(/size:\s*(small|medium|large)/gi, '').trim();
@@ -235,6 +252,12 @@ export async function PATCH(request: Request) {
         baseNotes = baseNotes.replace(/slices:\s*\d+/gi, '').trim();
         if (targetSlices > 0) {
           baseNotes = baseNotes ? `${baseNotes} slices:${targetSlices}` : `slices:${targetSlices}`;
+        }
+      }
+      if (targetCloves !== undefined) {
+        baseNotes = baseNotes.replace(/cloves:\s*\d+/gi, '').trim();
+        if (targetCloves > 0) {
+          baseNotes = baseNotes ? `${baseNotes} cloves:${targetCloves}` : `cloves:${targetCloves}`;
         }
       }
       updateData.notes = baseNotes || undefined;

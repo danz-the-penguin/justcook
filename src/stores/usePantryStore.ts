@@ -13,6 +13,7 @@ export interface PantryBatchData {
   notes?: string | null;
   size?: 'small' | 'medium' | 'large';
   slicesPerLoaf?: number;
+  clovesPerBulb?: number;
   freshness: 'fresh' | 'use_soon' | 'critical' | 'expired';
   daysLeft: number;
 }
@@ -84,6 +85,7 @@ interface PantryStore {
     unit?: string;
     size?: 'small' | 'medium' | 'large';
     slicesPerLoaf?: number;
+    clovesPerBulb?: number;
     obtainedAt?: string;
     expiresAt?: string;
     notes?: string;
@@ -122,9 +124,13 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
     sound.playPanImpact();
     const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch?.unit || '').toLowerCase());
-    const loafCap = targetBatch?.slicesPerLoaf || 8;
-    const deductAmt = isLoafUnit
-      ? Math.min(amount / loafCap, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount / loafCap : 0))
+    const isBulbUnit = ['bulb', 'bulbs', 'head', 'heads'].includes((targetBatch?.unit || '').toLowerCase()) || item.slug === 'garlic' || item.name.toLowerCase().includes('garlic');
+    const isCompositeItem = isLoafUnit || isBulbUnit;
+    const capacity = isBulbUnit
+      ? (targetBatch?.clovesPerBulb || targetBatch?.slicesPerLoaf || 10)
+      : (targetBatch?.slicesPerLoaf || 8);
+    const deductAmt = isCompositeItem
+      ? Math.min(amount / capacity, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount / capacity : 0))
       : Math.min(amount, targetBatch ? targetBatch.quantity : (item.totalQuantity > 0 ? amount : 0));
 
     // Optimistically deduct from inventory if in stock
@@ -154,7 +160,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
           name: item.name,
           category: item.category,
           amount: amount,
-          unit: item.slug === 'bread' ? 'slice' : item.defaultUnit,
+          unit: item.slug === 'bread' ? 'slice' : (item.slug === 'garlic' || item.name.toLowerCase().includes('garlic')) ? 'clove' : item.defaultUnit,
           size: itemSize,
           batchId: targetBatch?.id,
           droppedAt: Date.now(),
@@ -174,8 +180,9 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       if (p.batchId && p.amount > 0) {
         const b = allBatches.find((batch) => batch.id === p.batchId);
         const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
-        const loafCap = b?.slicesPerLoaf || 8;
-        const refundAmt = isLoaf ? p.amount / loafCap : p.amount;
+        const isBulb = ['bulb', 'bulbs', 'head', 'heads'].includes((b?.unit || '').toLowerCase()) || p.slug === 'garlic' || p.name.toLowerCase().includes('garlic');
+        const cap = isBulb ? (b?.clovesPerBulb || b?.slicesPerLoaf || 10) : (b?.slicesPerLoaf || 8);
+        const refundAmt = (isLoaf || isBulb) ? p.amount / cap : p.amount;
         get().incrementBatch(p.batchId, refundAmt);
       }
     }
@@ -191,8 +198,9 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       const allBatches = get().items.flatMap((i) => i.batches);
       const b = allBatches.find((batch) => batch.id === itemToRemove.batchId);
       const isLoaf = ['loaf', 'loaves'].includes((b?.unit || '').toLowerCase());
-      const loafCap = b?.slicesPerLoaf || 8;
-      const refundAmt = isLoaf ? itemToRemove.amount / loafCap : itemToRemove.amount;
+      const isBulb = ['bulb', 'bulbs', 'head', 'heads'].includes((b?.unit || '').toLowerCase()) || itemToRemove.slug === 'garlic' || itemToRemove.name.toLowerCase().includes('garlic');
+      const cap = isBulb ? (b?.clovesPerBulb || b?.slicesPerLoaf || 10) : (b?.slicesPerLoaf || 8);
+      const refundAmt = (isLoaf || isBulb) ? itemToRemove.amount / cap : itemToRemove.amount;
       get().incrementBatch(itemToRemove.batchId, refundAmt);
     }
     set({ prepItems: currentPrep.filter((p) => p.id !== id) });
@@ -502,7 +510,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
       await fetch('/api/pantry', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchId, slicesPerLoaf }),
+        body: JSON.stringify({ batchId, slicesPerLoaf, clovesPerBulb: slicesPerLoaf }),
       });
       await get().fetchPantry();
     } catch (e) {

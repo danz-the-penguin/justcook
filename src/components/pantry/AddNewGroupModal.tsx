@@ -27,16 +27,24 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     item.name.toLowerCase().includes('bread') ||
     ['slice', 'slices', 'loaf', 'loaves'].includes(unitLower);
 
+  const isGarlic =
+    item.slug === 'garlic' ||
+    item.name.toLowerCase().includes('garlic') ||
+    ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unitLower);
+
   const defaultLoc: StorageLocation = primaryBatch
     ? primaryBatch.location
     : isSpice || isBread
     ? 'pantry'
+    : isGarlic
+    ? 'counter'
     : 'fridge';
 
   const [location, setLocation] = useState<StorageLocation>(defaultLoc);
   const [sizeTier, setSizeTier] = useState<'small' | 'medium' | 'large'>('medium');
   const [quantity, setQuantity] = useState<number>(isSpice ? (isGrams ? 50 : isMl ? 100 : 1) : 1);
   const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(primaryBatch?.slicesPerLoaf || 8);
+  const [clovesPerBulb, setClovesPerBulb] = useState<number>(primaryBatch?.clovesPerBulb || primaryBatch?.slicesPerLoaf || 10);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Default expiry date based on storage location
@@ -65,7 +73,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     sound.playPop();
 
     try {
-      const finalUnit = isBread ? 'loaf' : item.defaultUnit;
+      const finalUnit = isBread ? 'loaf' : isGarlic ? 'bulb' : item.defaultUnit;
       const finalQuantity = Math.max(1, quantity);
 
       const newBatch = await addNewItemBatch({
@@ -77,9 +85,10 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
         unit: finalUnit,
         size: sizeTier,
         slicesPerLoaf: isBread ? slicesPerLoaf : undefined,
+        clovesPerBulb: isGarlic ? clovesPerBulb : undefined,
         obtainedAt: new Date().toISOString(),
         expiresAt: expiryDate ? new Date(expiryDate).toISOString() : undefined,
-        notes: `size:${sizeTier}${isBread ? ` slices:${slicesPerLoaf}` : ''}`,
+        notes: `size:${sizeTier}${isBread ? ` slices:${slicesPerLoaf}` : isGarlic ? ` cloves:${clovesPerBulb}` : ''}`,
       });
 
       setIsSubmitting(false);
@@ -179,7 +188,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
                 Asset Quantity to Add
               </label>
               <span className="text-xs font-sans font-medium text-[#201b16] bg-[#faeee8] px-2.5 py-0.5 rounded-full border border-[#f0d9cf]">
-                {quantity} {isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : (item.defaultUnit || 'piece')}
+                {quantity} {isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : (item.defaultUnit || 'piece')}
               </span>
             </div>
 
@@ -201,7 +210,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
                   {quantity}
                 </span>
                 <span className="text-xs text-[#796f64] ml-1.5 font-sans">
-                  {isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : 'Asset'}
+                  {isGarlic ? (quantity === 1 ? 'Bulb' : 'Bulbs') : isBread ? (quantity === 1 ? 'Loaf' : 'Loaves') : 'Asset'}
                 </span>
               </div>
 
@@ -217,7 +226,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
               </button>
             </div>
             <p className="text-[11px] text-[#8c8276] mt-1.5">
-              Default is strictly 1 asset. Each loaf or produce item is created individually.
+              Default is strictly 1 asset. Each {isGarlic ? 'bulb' : isBread ? 'loaf' : 'produce item'} is created individually.
             </p>
           </div>
 
@@ -267,6 +276,56 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
                   className="w-20 px-2.5 py-1 bg-white border border-[#e8e2d8] rounded-lg text-xs font-mono font-bold text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
                 />
                 <span className="text-xs text-[#796f64]">slices per whole loaf</span>
+              </div>
+            </div>
+          )}
+
+          {/* 3b. Bulb Clove Capacity (if garlic) */}
+          {isGarlic && (
+            <div className="bg-[#fbf9f5] border border-[#e8e2d8] rounded-2xl p-3.5">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
+                  Cloves for This Bulb
+                </label>
+                <span className="text-xs font-mono font-bold text-[#cc5a35] bg-[#faeee8] px-2 py-0.5 rounded-md border border-[#f0d9cf]">
+                  {clovesPerBulb} cloves
+                </span>
+              </div>
+              <p className="text-[11px] text-[#8c8276] mb-2.5">
+                This bulb will have {clovesPerBulb} cloves. Taking 1 clove deducts 1/{clovesPerBulb} from this bulb asset without disappearing!
+              </p>
+
+              <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5 no-scrollbar mb-2.5">
+                {[4, 6, 8, 10, 12, 14, 16].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => {
+                      sound.triggerHaptic('light');
+                      setClovesPerBulb(num);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-sans rounded-lg border transition-all cursor-pointer shrink-0 ${
+                      clovesPerBulb === num
+                        ? 'bg-[#cc5a35] text-white border-[#cc5a35] font-semibold shadow-2xs'
+                        : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border-[#e8e2d8]'
+                    }`}
+                  >
+                    {num} cloves
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-[#796f64] shrink-0 font-sans">Custom:</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="64"
+                  value={clovesPerBulb}
+                  onChange={(e) => setClovesPerBulb(Math.max(1, parseInt(e.target.value) || 10))}
+                  className="w-20 px-2.5 py-1 bg-white border border-[#e8e2d8] rounded-lg text-xs font-mono font-bold text-[#201b16] focus:outline-none focus:ring-1 focus:ring-[#cc5a35]"
+                />
+                <span className="text-xs text-[#796f64]">cloves per whole bulb</span>
               </div>
             </div>
           )}
@@ -351,7 +410,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
               <span>
                 {isSubmitting
                   ? 'Adding Group...'
-                  : `Add 1 ${sizeTier.charAt(0).toUpperCase() + sizeTier.slice(1)} ${isBread ? 'Loaf' : 'Group'}`}
+                  : `Add 1 ${sizeTier.charAt(0).toUpperCase() + sizeTier.slice(1)} ${isBread ? 'Loaf' : isGarlic ? 'Bulb' : 'Group'}`}
               </span>
             </button>
           </div>

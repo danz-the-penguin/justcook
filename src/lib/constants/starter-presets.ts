@@ -28,7 +28,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
       { slug: 'yeemee', name: 'Yee Mee', category: 'pantry', defaultUnit: 'piece', location: 'pantry', quantity: 2, daysLeft: 120 },
       { slug: 'cabbage', name: 'Cabbage', category: 'produce', defaultUnit: 'head', location: 'fridge', quantity: 1, daysLeft: 14 },
       { slug: 'egg', name: 'Egg', category: 'dairy', defaultUnit: 'piece', location: 'fridge', quantity: 6, daysLeft: 21 },
-      { slug: 'garlic', name: 'Garlic', category: 'pantry', defaultUnit: 'clove', location: 'pantry', quantity: 6, daysLeft: 30 },
+      { slug: 'garlic', name: 'Garlic', category: 'pantry', defaultUnit: 'bulb', location: 'pantry', quantity: 1, daysLeft: 30 },
       { slug: 'chili-crisp', name: 'Chili Crisp', category: 'spices', defaultUnit: 'jar', location: 'pantry', quantity: 1, daysLeft: 180 },
       { slug: 'soy-sauce', name: 'Soy Sauce', category: 'spices', defaultUnit: 'ml', location: 'pantry', quantity: 150, daysLeft: 365 },
       { slug: 'sesame-oil', name: 'Sesame Oil', category: 'spices', defaultUnit: 'ml', location: 'pantry', quantity: 100, daysLeft: 300 },
@@ -45,7 +45,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
     items: [
       { slug: 'pasta', name: 'Spaghetti', category: 'pantry', defaultUnit: 'g', location: 'pantry', quantity: 500, daysLeft: 365 },
       { slug: 'tomato-can', name: 'Canned Tomatoes', category: 'pantry', defaultUnit: 'can', location: 'pantry', quantity: 2, daysLeft: 700 },
-      { slug: 'garlic', name: 'Garlic', category: 'pantry', defaultUnit: 'clove', location: 'pantry', quantity: 5, daysLeft: 30 },
+      { slug: 'garlic', name: 'Garlic', category: 'pantry', defaultUnit: 'bulb', location: 'pantry', quantity: 1, daysLeft: 30 },
       { slug: 'olive-oil', name: 'Extra Virgin Olive Oil', category: 'spices', defaultUnit: 'ml', location: 'pantry', quantity: 250, daysLeft: 365 },
       { slug: 'parmesan', name: 'Parmesan', category: 'dairy', defaultUnit: 'g', location: 'fridge', quantity: 100, daysLeft: 45 },
       { slug: 'onion', name: 'Yellow Onion', category: 'produce', defaultUnit: 'piece', location: 'pantry', quantity: 2, daysLeft: 20 },

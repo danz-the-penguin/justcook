@@ -217,7 +217,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
     { slug: 'cheese', name: 'Cheddar Cheese', category: 'dairy', defaultUnit: 'g', pngAsset: '/assets/food/cheese.png' },
     { slug: 'tomato', name: 'Tomato', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/tomato.png' },
     { slug: 'spinach', name: 'Baby Spinach', category: 'produce', defaultUnit: 'g', pngAsset: '/assets/food/spinach.png' },
-    { slug: 'garlic', name: 'Garlic', category: 'produce', defaultUnit: 'clove', pngAsset: '/assets/food/garlic.png' },
+    { slug: 'garlic', name: 'Garlic', category: 'produce', defaultUnit: 'bulb', pngAsset: '/assets/food/garlic.png' },
     { slug: 'onion', name: 'Yellow Onion', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/onion.png' },
     { slug: 'chicken', name: 'Chicken Breast', category: 'meat', defaultUnit: 'g', pngAsset: '/assets/food/chicken.png' },
     { slug: 'pasta', name: 'Penne Pasta', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/pasta.png' },

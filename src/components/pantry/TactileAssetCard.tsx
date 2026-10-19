@@ -99,40 +99,65 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     item.name.toLowerCase().includes('bread') ||
     ['slice', 'slices', 'loaf', 'loaves'].includes(unit.toLowerCase());
 
-  const getLoafCapacity = (batch?: PantryBatchData | null): number => {
+  const isGarlic =
+    item.slug === 'garlic' ||
+    item.name.toLowerCase().includes('garlic') ||
+    ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unit.toLowerCase());
+
+  const isComposite = isBread || isGarlic;
+  const compositeType = isGarlic ? 'garlic' : 'bread';
+  const compositeUnitSingular = isGarlic ? 'Bulb' : 'Loaf';
+  const compositeUnitPlural = isGarlic ? 'Bulbs' : 'Loaves';
+  const subUnitSingular = isGarlic ? 'clove' : 'slice';
+  const subUnitPlural = isGarlic ? 'cloves' : 'slices';
+
+  const getCompositeCapacity = (batch?: PantryBatchData | null): number => {
+    if (isGarlic) {
+      return batch?.clovesPerBulb || batch?.slicesPerLoaf || 10;
+    }
     return batch?.slicesPerLoaf || 8;
   };
 
-  const getBreadSlices = (qty: number, unitStr: string, capacity: number = 8) => {
+  const getSubUnits = (qty: number, unitStr: string, capacity: number = isGarlic ? 10 : 8) => {
     const norm = (unitStr || '').toLowerCase().trim();
-    if (norm === 'loaf' || norm === 'loaves') return snapToCulinaryFraction(qty * capacity);
+    if (['loaf', 'loaves', 'bulb', 'bulbs', 'head', 'heads'].includes(norm)) {
+      return snapToCulinaryFraction(qty * capacity);
+    }
     return snapToCulinaryFraction(qty);
   };
 
   const activeBatches = item.batches.filter((b) => b.quantity > (isSpice ? 0 : 0.005));
   const hasMultipleBatches = activeBatches.length > 1;
 
-  const totalBreadSlices = activeBatches.reduce(
-    (acc, b) => acc + getBreadSlices(b.quantity, b.unit, getLoafCapacity(b)),
+  const totalSubUnits = activeBatches.reduce(
+    (acc, b) => acc + getSubUnits(b.quantity, b.unit, getCompositeCapacity(b)),
     0
   );
-  const totalBreadLoaves = activeBatches.reduce((acc, b) => {
-    const cap = getLoafCapacity(b);
-    const s = getBreadSlices(b.quantity, b.unit, cap);
+  const totalCompositeUnits = activeBatches.reduce((acc, b) => {
+    const cap = getCompositeCapacity(b);
+    const s = getSubUnits(b.quantity, b.unit, cap);
     return acc + Math.ceil(s / cap);
-  }, 0) || (totalBreadSlices > 0 ? 1 : 0);
+  }, 0) || (totalSubUnits > 0 ? 1 : 0);
 
-  const activeLoafCap = getLoafCapacity(targetBatch || primaryBatch);
-  const dynamicBreadSteps = [
-    { label: '1 slice', val: 1 },
-    { label: '½ slice', val: 0.5 },
-    { label: '2 slices', val: 2 },
-    { label: '¼ slice', val: 0.25 },
-    { label: `${Math.max(1, Math.round(activeLoafCap / 2))} slices (½ loaf)`, val: activeLoafCap / 2 },
-  ];
+  const activeCap = getCompositeCapacity(targetBatch || primaryBatch);
+  const dynamicCompositeSteps = isGarlic
+    ? [
+        { label: '1 clove', val: 1 },
+        { label: '½ clove', val: 0.5 },
+        { label: '2 cloves', val: 2 },
+        { label: '3 cloves', val: 3 },
+        { label: `${Math.max(1, Math.round(activeCap / 2))} cloves (½ bulb)`, val: activeCap / 2 },
+      ]
+    : [
+        { label: '1 slice', val: 1 },
+        { label: '½ slice', val: 0.5 },
+        { label: '2 slices', val: 2 },
+        { label: '¼ slice', val: 0.25 },
+        { label: `${Math.max(1, Math.round(activeCap / 2))} slices (½ loaf)`, val: activeCap / 2 },
+      ];
 
-  const availableSteps = isBread
-    ? dynamicBreadSteps
+  const availableSteps = isComposite
+    ? dynamicCompositeSteps
     : isSpice && isGrams
     ? SPICE_STEPS_GRAMS
     : isSpice && isMl
@@ -236,13 +261,13 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       });
     }
     overflowCount = Math.max(0, jarCount - 6);
-  } else if (isBread) {
-    // BREAD LOAF & SLICE ARCHITECTURE:
-    // 1 Loaf = N slices (configured by edit, default 8). One loaf is one asset, two loaves are two assets.
-    // Stepping minuses or adds in slices (1 slice, 1/2 slice, etc.)
-    // Visual loaf reduces 1/N on slice without making the asset disappear until 0 slices remain!
+  } else if (isComposite) {
+    // COMPOSITE ARCHITECTURE (Bread Loaves -> Slices, Garlic Bulbs -> Cloves):
+    // 1 Asset = N sub-units (configured by edit: default 8 slices for bread, 10 cloves for garlic).
+    // Stepping minuses or adds in sub-units (1 slice/clove, 1/2 slice/clove, etc.)
+    // Visual asset reduces 1/N on slice/clove deduction without making the asset disappear!
     let spritesAdded = 0;
-    let totalLogicalLoaves = 0;
+    let totalLogicalAssets = 0;
 
     for (let bIdx = 0; bIdx < displayedBatches.length; bIdx++) {
       const batch = displayedBatches[bIdx];
@@ -250,46 +275,46 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
 
       const sizeTier: 'small' | 'medium' | 'large' = batch.size || 'medium';
       const scaleFactor = sizeTier === 'small' ? 0.82 : sizeTier === 'large' ? 1.22 : 1.0;
-      const capacity = getLoafCapacity(batch);
-      const bSlices = getBreadSlices(batch.quantity, batch.unit, capacity);
+      const capacity = getCompositeCapacity(batch);
+      const bSubUnits = getSubUnits(batch.quantity, batch.unit, capacity);
 
-      const fullLoaves = Math.floor((bSlices + 0.0001) / capacity);
-      const remSlices = snapToCulinaryFraction(bSlices - fullLoaves * capacity);
-      const loavesInBatch = fullLoaves + (remSlices >= 0.04 ? 1 : 0);
-      totalLogicalLoaves += loavesInBatch;
+      const fullAssets = Math.floor((bSubUnits + 0.0001) / capacity);
+      const remSubUnits = snapToCulinaryFraction(bSubUnits - fullAssets * capacity);
+      const assetsInBatch = fullAssets + (remSubUnits >= 0.04 ? 1 : 0);
+      totalLogicalAssets += assetsInBatch;
 
-      // Full whole loaves in this batch
-      const fullToShow = Math.min(fullLoaves, maxSprites - spritesAdded);
+      // Full whole assets in this batch
+      const fullToShow = Math.min(fullAssets, maxSprites - spritesAdded);
       for (let i = 0; i < fullToShow; i++) {
         sprites.push({
-          id: `${batch.id}-loaf-full-${i}`,
+          id: `${batch.id}-${compositeType}-full-${i}`,
           batchId: batch.id,
           batchIndex: bIdx,
           daysLeft: batch.daysLeft,
           freshness: batch.freshness,
           fraction: 1,
           isPartial: false,
-          breadSliceLabel: `${capacity} slices`,
+          breadSliceLabel: `${capacity} ${subUnitPlural}`,
           sizeTier,
           scaleFactor,
         });
         spritesAdded++;
       }
 
-      // Partial loaf with remaining slices in this batch (does not disappear!)
-      if (remSlices >= 0.04 && spritesAdded < maxSprites) {
-        const fracInfo = formatQuantityWithCulinaryFraction(remSlices);
-        const loafFraction = Math.min(1, Math.max(0.0625, remSlices / capacity));
+      // Partial asset with remaining slices/cloves in this batch (does not disappear!)
+      if (remSubUnits >= 0.04 && spritesAdded < maxSprites) {
+        const fracInfo = formatQuantityWithCulinaryFraction(remSubUnits);
+        const assetFraction = Math.min(1, Math.max(0.0625, remSubUnits / capacity));
         sprites.push({
-          id: `${batch.id}-loaf-partial`,
+          id: `${batch.id}-${compositeType}-partial`,
           batchId: batch.id,
           batchIndex: bIdx,
           daysLeft: batch.daysLeft,
           freshness: batch.freshness,
-          fraction: loafFraction,
+          fraction: assetFraction,
           isPartial: true,
-          fractionLabel: `${fracInfo.display}/${capacity} slices`,
-          breadSliceLabel: `${fracInfo.display}/${capacity} slices`,
+          fractionLabel: `${fracInfo.display}/${capacity} ${subUnitPlural}`,
+          breadSliceLabel: `${fracInfo.display}/${capacity} ${subUnitPlural}`,
           sizeTier,
           scaleFactor,
         });
@@ -297,7 +322,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       }
     }
 
-    overflowCount = Math.max(0, totalLogicalLoaves - maxSprites);
+    overflowCount = Math.max(0, totalLogicalAssets - maxSprites);
   } else if (displayedBatches.length > 0) {
       let spritesAdded = 0;
 
@@ -445,7 +470,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const handleChopToPan = (e: React.MouseEvent) => {
     e.stopPropagation();
     const target = targetBatch || primaryBatch;
-    const amountToUse = isSpice ? currentStep.val : isBread ? currentStep.val : 1;
+    const amountToUse = isSpice ? currentStep.val : isComposite ? currentStep.val : 1;
     if (!isSpice) {
       sound.playKnifeChop();
       setIsSlicing(true);
@@ -459,15 +484,15 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
   const handleIncrement = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (targetBatch) {
-      const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
-      const cap = getLoafCapacity(targetBatch);
-      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
+      const isCompositeUnit = ['loaf', 'loaves', 'bulb', 'bulbs', 'head', 'heads'].includes((targetBatch.unit || '').toLowerCase()) || isComposite;
+      const cap = getCompositeCapacity(targetBatch);
+      const stepVal = isComposite && isCompositeUnit ? currentStep.val / cap : currentStep.val;
       incrementBatch(targetBatch.id, stepVal);
     } else {
-      const loc: StorageLocation = isSpice ? 'pantry' : 'fridge';
-      const isLoafUnit = ['loaf', 'loaves'].includes(unit.toLowerCase());
-      const cap = getLoafCapacity(primaryBatch);
-      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
+      const loc: StorageLocation = isSpice ? 'pantry' : isGarlic ? 'counter' : 'fridge';
+      const isCompositeUnit = ['loaf', 'loaves', 'bulb', 'bulbs', 'head', 'heads'].includes(unit.toLowerCase()) || isComposite;
+      const cap = getCompositeCapacity(primaryBatch);
+      const stepVal = isComposite && isCompositeUnit ? currentStep.val / cap : currentStep.val;
       incrementItem(item.slug, loc, stepVal);
     }
   };
@@ -478,16 +503,16 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       if (!isSpice) {
         sound.playKnifeChop();
       }
-      const isLoafUnit = ['loaf', 'loaves'].includes((targetBatch.unit || '').toLowerCase());
-      const cap = getLoafCapacity(targetBatch);
-      const stepVal = isBread && isLoafUnit ? currentStep.val / cap : currentStep.val;
+      const isCompositeUnit = ['loaf', 'loaves', 'bulb', 'bulbs', 'head', 'heads'].includes((targetBatch.unit || '').toLowerCase()) || isComposite;
+      const cap = getCompositeCapacity(targetBatch);
+      const stepVal = isComposite && isCompositeUnit ? currentStep.val / cap : currentStep.val;
       decrementBatch(targetBatch.id, stepVal);
     }
   };
 
   const handleAddNewBatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : 'fridge');
+    const loc: StorageLocation = primaryBatch ? primaryBatch.location : (isSpice ? 'pantry' : isGarlic ? 'counter' : 'fridge');
     const defaultQty = isSpice ? (isGrams ? 50 : 1) : 1;
     await addNewItemBatch({
       slug: item.slug,
@@ -496,7 +521,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       location: loc,
       quantity: defaultQty,
       unit: item.defaultUnit,
-      slicesPerLoaf: isBread ? getLoafCapacity(primaryBatch) : undefined,
+      slicesPerLoaf: isBread ? getCompositeCapacity(primaryBatch) : undefined,
+      clovesPerBulb: isGarlic ? getCompositeCapacity(primaryBatch) : undefined,
     });
   };
 
@@ -649,7 +675,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       : 'bg-white hover:bg-[#f2ede4] text-[#685f54] border border-[#e5dec9]'
                   }`}
                 >
-                  All ({isBread ? `${totalBreadLoaves} loaves` : formatQuantityWithCulinaryFraction(totalQty).display})
+                  All ({isComposite ? `${totalCompositeUnits} ${totalCompositeUnits === 1 ? compositeUnitSingular.toLowerCase() : compositeUnitPlural.toLowerCase()}` : formatQuantityWithCulinaryFraction(totalQty).display})
                 </button>
 
                 {/* Individual Group Tabs */}
@@ -658,8 +684,10 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   const days = b.daysLeft ?? 7;
                   const isUrgent = days <= 1;
                   const isSoon = days <= 3 && !isUrgent;
-                  const cap = getLoafCapacity(b);
-                  const sizeName = isBread
+                  const cap = getCompositeCapacity(b);
+                  const sizeName = isGarlic
+                    ? `Bulb ${idx + 1}`
+                    : isBread
                     ? `Loaf ${idx + 1}`
                     : b.size
                     ? b.size.charAt(0).toUpperCase() + b.size.slice(1)
@@ -677,11 +705,11 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           ? 'bg-[#cc5a35] text-white font-medium shadow-2xs'
                           : 'bg-white hover:bg-[#faeee8] text-[#3d362e] border border-[#e5dec9]'
                       }`}
-                      title={isBread ? `${sizeName}: ${cap} slices capacity • ${days}d left` : `${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
+                      title={isComposite ? `${sizeName}: ${cap} ${subUnitPlural} capacity • ${days}d left` : `${sizeName}: ${formatQuantityWithCulinaryFraction(b.quantity).display} ${unit} • ${days}d left`}
                     >
                       <span>{sizeName}</span>
                       <span className="font-mono text-[11px] opacity-85">
-                        {isBread ? `${cap} sl` : formatQuantityWithCulinaryFraction(b.quantity).display}
+                        {isComposite ? `${cap} ${isGarlic ? 'cl' : 'sl'}` : formatQuantityWithCulinaryFraction(b.quantity).display}
                       </span>
                       {isUrgent ? (
                         <span className="text-[10px] font-bold text-red-500">🚨 1d</span>
@@ -698,7 +726,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                 type="button"
                 onClick={() => setIsAddGroupModalOpen(true)}
                 className="w-7 h-7 rounded-xl bg-white hover:bg-[#faeee8] text-[#cc5a35] hover:text-[#9e3a19] border border-dashed border-[#cc5a35]/50 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs"
-                title="Add another group with chosen size, slices, or expiry date"
+                title="Add another group with chosen size, slices, cloves, or expiry date"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -721,13 +749,13 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                   <div className="flex items-center space-x-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#cc5a35] ring-2 ring-[#cc5a35]/30 animate-pulse shrink-0" />
                     <span className="font-serif font-medium text-[#201b16] capitalize">
-                      {isBread
-                        ? `Loaf ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'}):`
+                      {isComposite
+                        ? `${compositeUnitSingular} ${activeBatches.findIndex((b) => b.id === focusedBatch.id) + 1} (${focusedBatch.size || 'medium'}):`
                         : `${focusedBatch.size || 'medium'} Group:`}
                     </span>
                     <span className="font-mono font-bold text-[#cc5a35]">
-                      {isBread
-                        ? `${formatQuantityWithCulinaryFraction(getBreadSlices(focusedBatch.quantity, focusedBatch.unit, getLoafCapacity(focusedBatch))).display}/${getLoafCapacity(focusedBatch)} slices`
+                      {isComposite
+                        ? `${formatQuantityWithCulinaryFraction(getSubUnits(focusedBatch.quantity, focusedBatch.unit, getCompositeCapacity(focusedBatch))).display}/${getCompositeCapacity(focusedBatch)} ${subUnitPlural}`
                         : `${formatQuantityWithCulinaryFraction(focusedBatch.quantity).display} ${unit}`}
                     </span>
                   </div>
@@ -737,12 +765,12 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                       type="button"
                       onClick={() => onEditBatch(focusedBatch, item)}
                       className="text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white hover:bg-[#fff9f5] border border-[#f0d9cf] text-[#8a3319] hover:text-[#cc5a35] flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
-                      title={isBread ? "Edit slices for this loaf, expiry date, or size" : "Edit expiry date or size"}
+                      title={isComposite ? `Edit ${subUnitPlural} for this ${compositeUnitSingular.toLowerCase()}, expiry date, or size` : "Edit expiry date or size"}
                     >
                       <Pencil className="w-3 h-3 text-[#cc5a35]" />
                       <span>
-                        {isBread
-                          ? `Edit Slices (${getLoafCapacity(focusedBatch)})`
+                        {isComposite
+                          ? `Edit ${isGarlic ? 'Cloves' : 'Slices'} (${getCompositeCapacity(focusedBatch)})`
                           : focusedBatch.daysLeft !== undefined
                           ? focusedBatch.daysLeft <= 0
                             ? '🚨 Expired'
@@ -915,8 +943,8 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
                           {s.daysLeft <= 0 ? '🚨 Exp' : `🚨 ${s.daysLeft}d`}
                         </span>
                       )}
-                      {/* Subtly indicate bread slice count or non-medium size tier */}
-                      {isBread && s.breadSliceLabel ? (
+                      {/* Subtly indicate sub-unit count or non-medium size tier */}
+                      {isComposite && s.breadSliceLabel ? (
                         <span
                           className="absolute -bottom-1 -right-1 z-10 text-[10px] font-sans font-bold px-2 py-0.5 rounded-full shadow-xs bg-[#201b16] text-[#faf8f5] border border-white/60 leading-none"
                         >
@@ -1091,20 +1119,20 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
       <div className="mt-2 pt-2 border-t border-dashed border-[#efeae1] flex items-center justify-between gap-2">
         {/* Quantity display with fractions & focused batch indicator */}
         <div className="flex flex-col shrink-0 min-w-0">
-          {isBread ? (
+          {isComposite ? (
             <div className="flex flex-col">
               <div className="flex items-baseline space-x-1.5">
                 <span className="font-serif text-2xl sm:text-3xl font-medium text-[#201b16] tabular-nums tracking-tight">
-                  {totalBreadLoaves}
+                  {totalCompositeUnits}
                 </span>
                 <span className="text-sm sm:text-base font-sans text-[#787067]">
-                  {totalBreadLoaves === 1 ? 'Loaf' : 'Loaves'}
+                  {totalCompositeUnits === 1 ? compositeUnitSingular : compositeUnitPlural}
                 </span>
               </div>
               <span className="text-[11px] font-mono font-medium text-[#cc5a35]">
                 {focusedBatch
-                  ? `${formatQuantityWithCulinaryFraction(getBreadSlices(focusedBatch.quantity, focusedBatch.unit, getLoafCapacity(focusedBatch))).display}/${getLoafCapacity(focusedBatch)} slices in group`
-                  : `${formatQuantityWithCulinaryFraction(totalBreadSlices).display} slices in stock`}
+                  ? `${formatQuantityWithCulinaryFraction(getSubUnits(focusedBatch.quantity, focusedBatch.unit, getCompositeCapacity(focusedBatch))).display}/${getCompositeCapacity(focusedBatch)} ${subUnitPlural} in group`
+                  : `${formatQuantityWithCulinaryFraction(totalSubUnits).display} ${subUnitPlural} in stock`}
               </span>
             </div>
           ) : (
@@ -1131,7 +1159,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
               </button>
             </div>
           ) : (
-            !isBread && hasMultipleBatches && (
+            !isComposite && hasMultipleBatches && (
               <span className="text-[11px] font-sans text-[#8c8276]">
                 {activeBatches.length} groups on shelf
               </span>
