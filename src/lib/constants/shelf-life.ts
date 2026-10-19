@@ -35,7 +35,11 @@ export const SHELF_LIFE_PRESETS: Record<
 
   rice: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
   pasta: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
+  spaghetti: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
   penne: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
+  fusilli: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
+  macaroni: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
+  fettuccine: { fridge: 180, freezer: 365, pantry: 365, counter: 180 },
   flour: { fridge: 180, freezer: 365, pantry: 240, counter: 180 },
   bread: { fridge: 7, freezer: 90, pantry: 5, counter: 4 },
   canned_beans: { fridge: 4, freezer: 90, pantry: 730, counter: 730 },
@@ -103,6 +107,11 @@ export const KNOWN_FOOD_SLUGS = new Set([
   "olive_oil",
   "onion",
   "pasta",
+  "spaghetti",
+  "penne",
+  "fusilli",
+  "macaroni",
+  "fettuccine",
   "potato",
   "rice",
   "salt",
@@ -228,6 +237,11 @@ export const CORE_DEFAULT_FOOD_SLUGS = new Set([
   "onion",
   "chicken",
   "pasta",
+  "spaghetti",
+  "penne",
+  "fusilli",
+  "macaroni",
+  "fettuccine",
   "rice",
   "bread",
   "avocado",
@@ -386,4 +400,29 @@ export function getPastaShapeEmoji(shape?: string): string {
   if (!shape) return '🍝';
   const match = COMMON_PASTA_SHAPES.find((s) => s.name.toLowerCase() === shape.toLowerCase());
   return match ? match.emoji : '🍝';
+}
+
+export const PASTA_SLUGS = new Set([
+  'pasta',
+  'spaghetti',
+  'penne',
+  'fusilli',
+  'macaroni',
+  'fettuccine',
+  'farfalle',
+  'rigatoni',
+  'linguine',
+  'tagliatelle',
+  'lasagna',
+  'orzo',
+]);
+
+export function isPastaItem(slug?: string, name?: string): boolean {
+  const normSlug = (slug || '').toLowerCase();
+  const normName = (name || '').toLowerCase();
+  if (PASTA_SLUGS.has(normSlug)) return true;
+  if (/(pasta|spaghetti|penne|fusilli|macaroni|fettuccine|linguine|farfalle|rigatoni)/i.test(normName)) {
+    return true;
+  }
+  return false;
 }

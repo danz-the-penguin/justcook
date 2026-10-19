@@ -11,6 +11,7 @@ import {
   snapToCulinaryFraction,
   formatQuantityWithCulinaryFraction,
   getPastaShapeEmoji,
+  isPastaItem,
 } from '@/lib/constants/shelf-life';
 import { Plus, Minus, Calendar, Trash2, ArrowRightLeft, Pencil, MoreHorizontal, Utensils } from 'lucide-react';
 import { sound } from '@/lib/audio';
@@ -113,9 +114,7 @@ export function TactileAssetCardComponent({ item, onEditBatch, onEditItem }: Tac
     item.name.toLowerCase().includes('garlic') ||
     ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unit.toLowerCase());
 
-  const isPasta =
-    item.slug === 'pasta' ||
-    item.name.toLowerCase().includes('pasta');
+  const isPasta = isPastaItem(item.slug, item.name);
 
   const isComposite = isBread || isGarlic;
   const compositeType = isGarlic ? 'garlic' : 'bread';

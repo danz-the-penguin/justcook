@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { sound } from '@/lib/audio';
-import { StorageLocation, registerCustomFoodSlug, snapToCulinaryFraction } from '@/lib/constants/shelf-life';
+import { StorageLocation, registerCustomFoodSlug, snapToCulinaryFraction, isPastaItem } from '@/lib/constants/shelf-life';
 
 export interface PantryBatchData {
   id: string;
@@ -144,7 +144,7 @@ export const usePantryStore = create<PantryStore>((set, get) => ({
 
     // Add to prep board - keep distinct size tiers and pasta shapes separate!
     const pastaShape = targetBatch?.pastaShape;
-    const isPasta = item.slug === 'pasta' || item.name.toLowerCase().includes('pasta');
+    const isPasta = isPastaItem(item.slug, item.name);
     const currentPrep = get().prepItems;
     const existing = currentPrep.find(
       (p) => p.slug === item.slug && (p.size || 'medium') === itemSize && (!isPasta || p.pastaShape === pastaShape)

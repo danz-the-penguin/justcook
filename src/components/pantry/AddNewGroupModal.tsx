@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { EnrichedPantryItem, usePantryStore } from '@/stores/usePantryStore';
-import { StorageLocation, isSpiceOrJarItem, calculateExpiryDate, COMMON_PASTA_SHAPES, getPastaShapeEmoji } from '@/lib/constants/shelf-life';
+import { StorageLocation, isSpiceOrJarItem, calculateExpiryDate, COMMON_PASTA_SHAPES, getPastaShapeEmoji, isPastaItem } from '@/lib/constants/shelf-life';
 import { X, Plus, Minus, Check } from 'lucide-react';
 import { sound } from '@/lib/audio';
 
@@ -32,9 +32,7 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     item.name.toLowerCase().includes('garlic') ||
     ['bulb', 'bulbs', 'head', 'heads', 'clove', 'cloves'].includes(unitLower);
 
-  const isPasta =
-    item.slug === 'pasta' ||
-    item.name.toLowerCase().includes('pasta');
+  const isPasta = isPastaItem(item.slug, item.name);
 
   const defaultLoc: StorageLocation = primaryBatch
     ? primaryBatch.location
@@ -44,9 +42,16 @@ export function AddNewGroupModal({ isOpen, item, onClose, onGroupAdded }: AddNew
     ? 'counter'
     : 'fridge';
 
+  const defaultShape = () => {
+    const norm = item.slug.toLowerCase();
+    const matched = COMMON_PASTA_SHAPES.find((s) => s.name.toLowerCase() === norm);
+    if (matched) return matched.name;
+    return primaryBatch?.pastaShape || 'Spaghetti';
+  };
+
   const [location, setLocation] = useState<StorageLocation>(defaultLoc);
   const [sizeTier, setSizeTier] = useState<'small' | 'medium' | 'large'>('medium');
-  const [pastaShape, setPastaShape] = useState<string>('Spaghetti');
+  const [pastaShape, setPastaShape] = useState<string>(defaultShape());
   const [quantity, setQuantity] = useState<number>(isPasta ? 500 : isSpice ? (isGrams ? 50 : isMl ? 100 : 1) : 1);
   const [slicesPerLoaf, setSlicesPerLoaf] = useState<number>(primaryBatch?.slicesPerLoaf || 8);
   const [clovesPerBulb, setClovesPerBulb] = useState<number>(primaryBatch?.clovesPerBulb || primaryBatch?.slicesPerLoaf || 10);

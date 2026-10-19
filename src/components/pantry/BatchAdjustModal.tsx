@@ -10,6 +10,7 @@ import {
   formatQuantityWithCulinaryFraction,
   COMMON_PASTA_SHAPES,
   getPastaShapeEmoji,
+  isPastaItem,
 } from '@/lib/constants/shelf-life';
 import { X, Trash2, Check, Pencil } from 'lucide-react';
 
@@ -80,9 +81,7 @@ export function BatchAdjustModal({ batch, item, onOpenEditItem, onClose }: Batch
 
   const isBulbUnit = ['bulb', 'bulbs', 'head', 'heads'].includes(unitLower);
 
-  const isPasta =
-    item.slug === 'pasta' ||
-    item.name.toLowerCase().includes('pasta');
+  const isPasta = isPastaItem(item.slug, item.name);
 
   const pastaGramPresets = [
     { label: '100g', val: 100 },

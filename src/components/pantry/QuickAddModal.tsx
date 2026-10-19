@@ -209,8 +209,8 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
     };
   }, [uploadPreview]);
 
-  // Available master food items
-  const catalog = items.length > 0 ? items : [
+  // Master catalog of all supported staples and varieties
+  const masterCatalog = [
     { slug: 'egg', name: 'Egg', category: 'dairy', defaultUnit: 'piece', pngAsset: '/assets/food/egg.png' },
     { slug: 'milk', name: 'Whole Milk', category: 'dairy', defaultUnit: 'ml', pngAsset: '/assets/food/milk.png' },
     { slug: 'butter', name: 'Butter', category: 'dairy', defaultUnit: 'g', pngAsset: '/assets/food/butter.png' },
@@ -220,11 +220,41 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
     { slug: 'garlic', name: 'Garlic', category: 'produce', defaultUnit: 'bulb', pngAsset: '/assets/food/garlic.png' },
     { slug: 'onion', name: 'Yellow Onion', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/onion.png' },
     { slug: 'chicken', name: 'Chicken Breast', category: 'meat', defaultUnit: 'g', pngAsset: '/assets/food/chicken.png' },
-    { slug: 'pasta', name: 'Pasta', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/pasta.png' },
+    { slug: 'spaghetti', name: 'Spaghetti', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/spaghetti.png' },
+    { slug: 'penne', name: 'Penne', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/penne.png' },
+    { slug: 'fusilli', name: 'Fusilli', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/fusilli.png' },
+    { slug: 'macaroni', name: 'Macaroni', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/macaroni.png' },
+    { slug: 'fettuccine', name: 'Fettuccine', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/fettuccine.png' },
+    { slug: 'pasta', name: 'Pasta (Assorted)', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/pasta.png' },
     { slug: 'yee_mee', name: 'Yee Mee', category: 'pantry', defaultUnit: 'piece', pngAsset: '/assets/food/yeemee.png' },
     { slug: 'rice', name: 'Jasmine Rice', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/rice.png' },
+    { slug: 'flour', name: 'All-Purpose Flour', category: 'pantry', defaultUnit: 'g', pngAsset: '/assets/food/flour.png' },
     { slug: 'bread', name: 'Artisan Bread', category: 'pantry', defaultUnit: 'slice', pngAsset: '/assets/food/bread.png' },
+    { slug: 'potato', name: 'Potato', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/potato.png' },
+    { slug: 'carrot', name: 'Carrot', category: 'produce', defaultUnit: 'piece', pngAsset: '/assets/food/carrot.png' },
+    { slug: 'olive_oil', name: 'Olive Oil', category: 'spices', defaultUnit: 'ml', pngAsset: '/assets/food/olive_oil.png' },
+    { slug: 'soy_sauce', name: 'Soy Sauce', category: 'spices', defaultUnit: 'ml', pngAsset: '/assets/food/soy_sauce.png' },
+    { slug: 'salt', name: 'Sea Salt', category: 'spices', defaultUnit: 'g', pngAsset: '/assets/food/salt.png' },
+    { slug: 'black_pepper', name: 'Black Pepper', category: 'spices', defaultUnit: 'g', pngAsset: '/assets/food/black_pepper.png' },
   ];
+
+  // Merge master items with any custom assets created in the user's pantry
+  const catalog = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const m of masterCatalog) {
+      map.set(m.slug, m);
+    }
+    for (const item of items) {
+      map.set(item.slug, {
+        slug: item.slug,
+        name: item.name,
+        category: item.category,
+        defaultUnit: item.defaultUnit,
+        pngAsset: item.pngAsset,
+      });
+    }
+    return Array.from(map.values());
+  }, [items]);
 
   // Auto-calculate smart expiry for standard stock
   useEffect(() => {
@@ -237,8 +267,10 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
     const selected = catalog.find((i) => i.slug === selectedSlug);
     if (selected) {
       setUnit(selected.defaultUnit);
-      if (['piece', 'slice', 'clove'].includes(selected.defaultUnit)) {
-        setQuantity(6);
+      if (['piece', 'slice', 'clove', 'bulb'].includes(selected.defaultUnit)) {
+        setQuantity(selected.defaultUnit === 'bulb' ? 1 : selected.defaultUnit === 'slice' ? 8 : 6);
+      } else if (['g', 'gram', 'grams'].includes(selected.defaultUnit.toLowerCase())) {
+        setQuantity(selected.category === 'pantry' ? 500 : 200);
       } else {
         setQuantity(200);
       }
@@ -246,7 +278,7 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
       const exp = calculateExpiryDate(selected.slug, selected.category, location);
       setExpiryDate(exp.toISOString().split('T')[0]);
     }
-  }, [selectedSlug, location, customName, customCategory]);
+  }, [selectedSlug, location, customName, customCategory, catalog]);
 
   // Auto-calculate smart expiry for custom upload
   useEffect(() => {
@@ -940,10 +972,35 @@ export function QuickAddModal({ isOpen, initialTab = 'standard', onClose }: Quic
 
             {/* Visual Food Selection Grid */}
             <div>
-              <label className="block text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider mb-2.5">
-                Or Choose Preset Ingredient
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-sans font-semibold text-[#796f64] uppercase tracking-wider">
+                  Or Choose Preset Ingredient
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('upload')}
+                  className="text-xs font-sans font-semibold text-[#cc5a35] hover:text-[#b54926] flex items-center space-x-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Upload My Own Asset</span>
+                </button>
+              </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-52 overflow-y-auto p-2.5 bg-white rounded-xl border border-[#e8e2d8]">
+                {/* Add My Own Asset Quick Tile */}
+                <button
+                  type="button"
+                  onClick={() => setModalTab('upload')}
+                  className="w-full flex flex-col items-center justify-center p-2.5 rounded-xl border-2 border-dashed border-[#dfd7c8] hover:border-[#cc5a35] bg-[#faf8f5] hover:bg-[#faeee8] text-[#cc5a35] transition-all group"
+                  title="Upload your own custom transparent PNG food sprite"
+                >
+                  <div className="w-12 h-12 rounded-full bg-[#faeee8] group-hover:bg-[#f4ddd2] flex items-center justify-center mb-1.5 transition-colors">
+                    <Plus className="w-6 h-6 text-[#cc5a35] group-hover:scale-110 transition-transform" />
+                  </div>
+                  <span className="text-xs font-sans font-semibold truncate max-w-full">
+                    + Custom Asset
+                  </span>
+                </button>
+
                 {catalog.map((item) => {
                   const isSelected = !customName.trim() && selectedSlug === item.slug;
                   const isCustom = !CORE_DEFAULT_FOOD_SLUGS.has(item.slug);
